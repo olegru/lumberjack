@@ -19,43 +19,127 @@ class SGMB
 		$sgmbButton->init();
 	}
 
-	public function buttonsShowOnEveryPost( $content )
+	public function buttonsShowOnEveryPost($content)
 	{
-		$postTitle = get_the_title();
+		$sgmbPosition = '';
+		$contentsWithSocial = '';
+		$showButtonsBeforePostContents = true;
+		$postID = get_the_ID();
 		$id = get_option('SGMB_SHARE_BUTTON_ID');
 		$obj = SGMBButton::findById($id);
+
 		if($obj) {
 			$data = json_decode($obj->getOptions(), true);
 			$textBeforeSocialMedia = @$data['textOnEveryPost'];
-			$postsTitleInData = @$data['sgmbSelectedPosts'];
-			switch (@$data['sgmbPostionOnEveryPost']) {
-				case 'Left':
+			$sgmbSelectedPosts = @$data['sgmbSelectedPosts'];
+			$selectedOrExcluded = @$data['selectedOrExcluded'];
+			$sgmbExcludedPosts = @$data['sgmbExcludedPosts'];
+
+			// backward compatibility
+			if (@$data['sgmbPostionOnEveryPost'] != null) {
+				switch (@$data['sgmbPostionOnEveryPost']) {
+					case 'Left':
+						@$data['sgmbButtonsPosition'] = 'bottomLeft';
+						break;
+					case 'Center':
+						@$data['sgmbButtonsPosition'] = 'bottomCenter';
+						break;
+					case 'Right':
+						@$data['sgmbButtonsPosition'] = 'bottomRight';
+						break;
+				}
+			}
+
+			switch (@$data['sgmbButtonsPosition']) {
+				case 'topLeft':
 					$sgmbPosition = 'sgmb-left';
 					break;
-				case 'Center':
+				case 'topCenter':
 					$sgmbPosition = 'sgmb-center';
 					break;
-				case 'Right':
+				case 'topRight':
 					$sgmbPosition = 'sgmb-right';
 					break;
+				case 'bottomLeft':
+					$sgmbPosition = 'sgmb-left';
+					$showButtonsBeforePostContents = false;
+					break;
+				case 'bottomCenter':
+					$sgmbPosition = 'sgmb-center';
+					$showButtonsBeforePostContents = false;
+					break;
+				case 'bottomRight':
+					$sgmbPosition = 'sgmb-right';
+					$showButtonsBeforePostContents = false;
+					break;
 			}
-			if($data['showButtonsOnEveryPost'] == 'on') {
-				foreach ($postsTitleInData as  $postTitleInData) {
-					if(!is_home() && $postTitle == $postTitleInData) {
-						$content .= "<div class = 'socialMediaOnEveryPost'>";
-						$content .= @$textBeforeSocialMedia;
-						$content .= do_shortcode( "[sgmb id=$id]" );
-						$content .= "</div>";
-						$content .= '<script> jQuery(".socialMediaOnEveryPost").addClass("'.$sgmbPosition.'") </script>';
+
+			if(@$data['showButtonsOnEveryPost'] == 'on') {
+
+				if ($selectedOrExcluded == '' && !is_page()) {
+					if(!$showButtonsBeforePostContents) {
+						$contentsWithSocial .= $content;
+					}
+					$contentsWithSocial .= "<div class = 'socialMediaOnEveryPost'>";
+					$contentsWithSocial .= @$textBeforeSocialMedia;
+					$contentsWithSocial .= do_shortcode( "[sgmb id=$id]" );
+					$contentsWithSocial .= "</div>";
+					$contentsWithSocial .= '<script> jQuery(".socialMediaOnEveryPost").addClass("'.$sgmbPosition.'") </script>';
+					if($showButtonsBeforePostContents) {
+						$contentsWithSocial .= $content;
+					}
+				}
+				else if($selectedOrExcluded == 'selected' && !is_home() && !is_page()) {
+					foreach ($sgmbSelectedPosts as $sgmbSelectedPost) {
+						if(!is_home() && $postID == $sgmbSelectedPost) {
+							if(!$showButtonsBeforePostContents) {
+								$contentsWithSocial .= $content;
+							}
+							$contentsWithSocial .= "<div class = 'socialMediaOnEveryPost'>";
+							$contentsWithSocial .= @$textBeforeSocialMedia;
+							$contentsWithSocial .= do_shortcode( "[sgmb id=$id]" );
+							$contentsWithSocial .= "</div>";
+							$contentsWithSocial .= '<script> jQuery(".socialMediaOnEveryPost").addClass("'.$sgmbPosition.'") </script>';
+							if($showButtonsBeforePostContents) {
+								$contentsWithSocial .= $content;
+							}
+						}
+					}
+				}
+				else if($selectedOrExcluded == 'excluded' && !is_home() && !is_page()) {
+					$excludePostKey = array_search($postID, $sgmbExcludedPosts);
+
+					if(!$showButtonsBeforePostContents) {
+						$contentsWithSocial .= $content;
+					}
+
+					if ($excludePostKey === false) {
+						$contentsWithSocial .= "<div class = 'socialMediaOnEveryPost'>";
+						$contentsWithSocial .= @$textBeforeSocialMedia;
+						$contentsWithSocial .= do_shortcode( "[sgmb id=$id]" );
+						$contentsWithSocial .= "</div>";
+						$contentsWithSocial .= '<script> jQuery(".socialMediaOnEveryPost").addClass("'.$sgmbPosition.'") </script>';
+					}
+
+					if($showButtonsBeforePostContents) {
+						$contentsWithSocial .= $content;
 					}
 				}
 			}
 		}
-		return $content;
+		if ($contentsWithSocial == '') {
+			$contentsWithSocial = $content;
+		}
+		return $contentsWithSocial;
 	}
 
+	public function showShortCode($args)
+	{
+		$widget = new SgmbWidget();
+		return $widget->init($args);
+	}
 
-	public function wptuts_add_color_picker( $hook )
+	public function wptuts_add_color_picker($hook)
 	{
 		if( is_admin() ) {
 
@@ -66,7 +150,6 @@ class SGMB
 			wp_enqueue_script( 'custom-script-handle', SGMB_URL.'js/addNewSection/SGMBLivePreview.js', array( 'wp-color-picker' ), false, true );
 		}
 	}
-
 	public function mediaButtons()
 	{
 		wp_register_script('sgmb-classWidget-scripts', SGMB_URL.'js/addNewSection/SGMBWidget.js', array('jquery', 'jquery-ui-core', 'jquery-ui-tabs', 'jquery-ui-draggable', 'jquery-ui-droppable', 'jquery-ui-accordion', 'jquery-ui-dialog'),null);
@@ -154,28 +237,30 @@ class SGMB
 
 	public function addMenu()
 	{
-		add_menu_page("button", "Social Media", "manage_options", "socialmediabuilder", array( $this, 'showAllButtons' ), "dashicons-share");
-		add_submenu_page("socialmediabuilder", "All Buttons", "All Buttons", 'manage_options', "socialmediabuilder", array( $this, 'showAllButtons' ));
-		add_submenu_page("socialmediabuilder", "Add New", "Add New", 'manage_options', "create-button", array( $this, 'createButtons' ));
+		add_menu_page("button", "Social Media", "manage_options", "socialmediabuilder", array($this, 'showAllButtons'), "dashicons-share");
+		add_submenu_page("socialmediabuilder", "All Buttons", "All Buttons", 'manage_options', "socialmediabuilder", array($this, 'showAllButtons'));
+		add_submenu_page("socialmediabuilder", "Add New", "Add New", 'manage_options', "create-button", array($this, 'createButtons'));
+		add_submenu_page("socialmediabuilder", "More plugins", "More plugins", 'manage_options', "show-more-plugins", array($this, 'showMorePlugins'));
 	}
 
 	public function showAllButtons()
 	{
-		require_once( SGMB_CLASSES .'pages/SgmbAllButtonsSection.php');
+		require_once(SGMB_CLASSES .'pages/SgmbAllButtonsSection.php');
 		$sgmb = new SgmbAllButtonsSection();
 		$sgmb->init();
 	}
 
 	public function createButtons()
 	{
-		require_once( SGMB_CLASSES .'pages/SgmbAddNewSection.php');
+		require_once(SGMB_CLASSES .'pages/SgmbAddNewSection.php');
 		$sgmb = new SgmbAddNewSection();
 		$sgmb->init();
 	}
 
-	public function showShortCode($args)
+	public function showMorePlugins()
 	{
-		$widget = new SgmbWidget();
-		return $widget->init($args);
+		require_once(SGMB_CLASSES .'pages/SgmbShowMorePlugins.php');
+		$sgmb = new SgmbShowMorePlugins();
+		$sgmb->init();
 	}
 }

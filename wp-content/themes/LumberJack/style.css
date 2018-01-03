@@ -1,13 +1,13 @@
 /***** FONTS *****/
 @import "http://webfonts.ru/import/osans.css";
 
-.language-chooser {
-	list-style:none !important;
-}
-.language-chooser li {
-	display:inline-block !important;
-}
 
+@font-face {
+	font-family: 'MuseoSansCyrl500';
+	src: url('fonts/MuseoSansCyrl_1.otf');
+	font-weight: normal;
+	font-style: normal;
+}
 @font-face {
 	font-family: 'BaronNeueBold';
 	src: url('fonts/BaronNeueBold.eot');
@@ -120,13 +120,9 @@ a{
 LOADER END */
 
 .wrapper {
-  width: 100%;
-  margin: 0 auto;
-  min-height: 100%;
-  height: auto !important;
-  height: 100%;
-  overflow: hidden;
-  position: relative;
+    max-width: 1240px;
+    padding: 0 20px;
+    margin: 0 auto;
 }
 
 .relative{
@@ -147,35 +143,6 @@ LOADER END */
 	display: block;
 }
 
-#menu-menu-menu, #menu-menu-menu-en{
-	list-style: none;
-	margin: 25px 0 0 0;
-	padding: 0;
-}
-
-#menu-menu-menu li, #menu-menu-menu-en li{
-	width: auto;
-	display: inline-block;
-	text-align: center;
-}
-
-#menu-menu-menu li a, #menu-menu-menu-en li a{
-	display: inline-block;
-	padding: 12px 0;
-	color:#888889;
-	font-size:18px;
-	font-family: 'HelveticaNeueCyr-Roman', Arial, sans-serif;
-	transition:.3s;
-}
-
-#menu-menu-menu li a:hover, #menu-menu-menu-en li a:hover{
-	color:#fff;
-}
-
-#menu-menu-menu li.current-menu-item a, #menu-menu-menu-en li.current-menu-item a{
-	color:#fff;
-}
-
 #enroll.enClass{
 	font-size: 18px !important;
 }
@@ -193,111 +160,6 @@ LOADER END */
 	text-transform: uppercase;
 	transition:.3s;
 }
-
-#social-sidebar{
-	list-style: none;
-	text-align: center;
-	margin: 0 0 15px 0;
-	padding:0;
-}
-
-#social-sidebar li{
-	display: inline-block;
-	margin: 0 1px 0 0;
-	opacity: .3;
-	border:1px solid rgba(255,255,255,.8);
-	transition:.3s;
-}
-
-#social-sidebar li:last-child{
-	margin:0;
-}
-
-#social-sidebar li a{
-	width:31px;
-	height:31px;
-	margin: 0;
-	display: block;
-	transition:.3s;
-	opacity: .5;
-	background-position: 50% 50% !important;
-}
-
-#social-sidebar li a.vk{
-	background:url(img/vk.png) no-repeat;
-}
-
-#social-sidebar li a.fb{
-	background:url(img/fb.png) no-repeat;
-}
-
-#social-sidebar li a.inst{
-	background:url(img/inst.png) no-repeat;
-}
-#social-sidebar li a.youtube{
-	background:url(img/youtube.png) no-repeat;
-}
-#social-sidebar li a.googlePlus{
-	background:url(img/googlePlus.png) no-repeat;
-}
-
-
-
-#social-sidebar li:hover{
-	border:1px solid rgba(255,255,255,1);
-	opacity: 1;
-}
-
-#social-sidebar li:hover a{
-	opacity: 1;
-}
-
-.selectLang{
-	width:100%;
-	margin-top:10px;
-	text-align: center;
-}
-
-.selectLang a{
-	display: inline-block;
-	font-size: 14px;
-	color:#fff;
-	transition:.3s;
-	opacity: .5;
-}
-
-.selectLang a:hover{
-	opacity: 1;
-	color:#fff;
-}
-
-.selectLang a.currentLang{opacity: 1;}
-
-.selectLang a:last-child{margin-left:10px;}
-
-.selectLangMob{
-	width:100px;
-	float:left;
-	margin-left:10px;
-	margin-top: 5px;
-}
-
-.selectLangMob a{
-	display: inline-block;
-	font-size: 14px;
-	color:#e41936;
-	transition:.3s;
-	opacity: .5;
-}
-
-.selectLangMob a:hover{
-	opacity: 1;
-	color:#e41936;
-}
-
-.selectLangMob a.currentLang{opacity: 1;}
-
-.selectLangMob a:last-child{margin-left:3px;}
 
 /* CONTENT-SIDE FRONT-PAGE
 *******************************************************/
@@ -3488,21 +3350,161 @@ body .woocommerce input.button.alt:hover{
 
 
 
-// Redesign
+/* Redesign */
 .header {
+	background-color: #000;
+	height: 138px;
+}
+.header .wrap1 {
+	margin: 0 -99999px;
+	background-color: #000;
+	position: relative;
+}
+.header .wrap2 {
+	max-width: 1280px;
+	width: 100%;
+    margin: 0 auto;
+    height: 138px;
+    align-items: center;
 	display: flex;
-    justify-content: space-between;
+	flex-direction: row;
+	align-content: space-between;
 }
 .header .logo {
-	flex-shrink: 0;
-	height:40px;
-	width: 200px;
+	flex-grow: 0;
+	height:52px;
+	width: 223px;
 	margin:0;
-	background:url(img/side_logo_bg.png) no-repeat;
-	background-position: 50% 50%;
-	background-size:cover !important;
-	box-sizing:border-box;
+}
+.menu-main-container {
+	flex-grow: 1;
+    text-align: center;
 }
 .mainmenu {
-	flex: 1;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.mainmenu li {
+	width: auto;
+	display: inline-block;
+	text-align: center;
+	padding: 0 20px;
+}
+.mainmenu li a {
+	display: inline-block;
+	padding: 12px 0;
+	color:#888889;
+	font-size:18px;
+	font-family: 'MuseoSansCyrl500', Arial, sans-serif;
+	transition:.3s;
+}
+.mainmenu li a:hover {
+	color: #fff;
+}
+
+.mainmenu li.current-menu-item a {
+	color: #fff;
+}
+
+.selectLang {
+	flex-grow: 0;
+	text-align: center;
+	margin: 0;
+}
+
+.selectLang a{
+	display: inline-block;
+	font-size: 14px;
+	color:#fff;
+	transition:.3s;
+	opacity: .5;
+}
+.selectLang a:hover {
+	opacity: 1;
+	color:#fff;
+}
+.selectLang a.currentLang {
+	opacity: 1;
+}
+.selectLang a:last-child {
+	margin-left:10px;
+}
+.selectLangMob {
+	width:100px;
+	float:left;
+	margin-left:10px;
+	margin-top: 5px;
+}
+.selectLangMob a {
+	display: inline-block;
+	font-size: 14px;
+	color:#e41936;
+	transition:.3s;
+	opacity: .5;
+}
+.selectLangMob a:hover {
+	opacity: 1;
+	color:#e41936;
+}
+.selectLangMob a.currentLang{
+	opacity: 1;
+}
+.selectLangMob a:last-child{
+	margin-left:3px;
+}
+.language-chooser {
+	list-style: none;
+	margin: 0;
+}
+.language-chooser li {
+	display: inline-block;
+}
+#social-sidebar {
+	display: none;
+	list-style: none;
+	text-align: center;
+	margin: 0;
+	padding: 0;
+}
+#social-sidebar li{
+	display: inline-block;
+	margin: 0 1px 0 0;
+	opacity: .3;
+	border:1px solid rgba(255,255,255,.8);
+	transition:.3s;
+}
+#social-sidebar li:last-child{
+	margin:0;
+}
+#social-sidebar li a{
+	width:31px;
+	height:31px;
+	margin: 0;
+	display: block;
+	transition:.3s;
+	opacity: .5;
+	background-position: 50% 50% !important;
+}
+#social-sidebar li a.vk{
+	background:url(img/vk.png) no-repeat;
+}
+#social-sidebar li a.fb{
+	background:url(img/fb.png) no-repeat;
+}
+#social-sidebar li a.inst{
+	background:url(img/inst.png) no-repeat;
+}
+#social-sidebar li a.youtube{
+	background:url(img/youtube.png) no-repeat;
+}
+#social-sidebar li a.googlePlus{
+	background:url(img/googlePlus.png) no-repeat;
+}
+#social-sidebar li:hover{
+	border:1px solid rgba(255,255,255,1);
+	opacity: 1;
+}
+#social-sidebar li:hover a{
+	opacity: 1;
 }

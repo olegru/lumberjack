@@ -1,7 +1,7 @@
 <?php
 defined( 'ABSPATH' ) || die( 'Cheatin\' uh?' );
 
-add_filter( 'attachment_fields_to_edit', '_imagify_attachment_fields_to_edit', PHP_INT_MAX, 2 );
+add_filter( 'attachment_fields_to_edit', '_imagify_attachment_fields_to_edit', IMAGIFY_INT_MAX, 2 );
 /**
  * Add "Imagify" column in the Media Uploader
  *
@@ -19,8 +19,11 @@ function _imagify_attachment_fields_to_edit( $form_fields, $post ) {
 		return $form_fields;
 	}
 
-	$class_name = get_imagify_attachment_class_name( 'wp', $post->ID, 'attachment_fields_to_edit' );
-	$attachment = new $class_name( $post->ID );
+	if ( ! imagify_current_user_can( 'manual-optimize', $post->ID ) ) {
+		return $form_fields;
+	}
+
+	$attachment = get_imagify_attachment( 'wp', $post->ID, 'attachment_fields_to_edit' );
 
 	$form_fields['imagify'] = array(
 		'label'         => 'Imagify',
@@ -33,7 +36,7 @@ function _imagify_attachment_fields_to_edit( $form_fields, $post ) {
 	return $form_fields;
 }
 
-add_filter( 'media_row_actions', '_imagify_add_actions_to_media_list_row', PHP_INT_MAX, 2 );
+add_filter( 'media_row_actions', '_imagify_add_actions_to_media_list_row', IMAGIFY_INT_MAX, 2 );
 /**
  * Add "Compare Original VS Optimized" link to the media row action
  *
@@ -45,13 +48,16 @@ add_filter( 'media_row_actions', '_imagify_add_actions_to_media_list_row', PHP_I
  * @return array
  */
 function _imagify_add_actions_to_media_list_row( $actions, $post ) {
-	// If this attachment is not an image, do nothing.
-	if ( ! imagify_is_attachment_mime_type_supported( $post->ID ) ) {
+	if ( ! imagify_current_user_can( 'manual-optimize', $post->ID ) ) {
 		return $actions;
 	}
 
-	$class_name = get_imagify_attachment_class_name( 'wp', $post->ID, 'media_row_actions' );
-	$attachment = new $class_name( $post->ID );
+	$attachment = get_imagify_attachment( 'wp', $post->ID, 'media_row_actions' );
+
+	// If this attachment is not an image, do nothing.
+	if ( ! $attachment->is_mime_type_supported() ) {
+		return $actions;
+	}
 
 	// If Imagify license not valid, or image is not optimized, do nothing.
 	if ( ! imagify_valid_key() || ! $attachment->is_optimized() ) {
@@ -65,7 +71,7 @@ function _imagify_add_actions_to_media_list_row( $actions, $post ) {
 
 	$image = wp_get_attachment_image_src( $post->ID, 'full' );
 
-	// If full image is too small.
+	// If full image is too small. See get_imagify_localize_script_translations().
 	if ( ! $image || (int) $image[1] < 360 ) {
 		return $actions;
 	}

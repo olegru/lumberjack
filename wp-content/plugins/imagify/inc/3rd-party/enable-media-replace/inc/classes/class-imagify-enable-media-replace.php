@@ -14,7 +14,7 @@ class Imagify_Enable_Media_Replace {
 	 *
 	 * @var string
 	 */
-	const VERSION = '1.0';
+	const VERSION = '1.0.1';
 
 	/**
 	 * The attachment ID.
@@ -87,7 +87,7 @@ class Imagify_Enable_Media_Replace {
 		}
 
 		// Remove the automatic optimization.
-		remove_filter( 'wp_generate_attachment_metadata', '_imagify_optimize_attachment', PHP_INT_MAX );
+		remove_filter( 'wp_generate_attachment_metadata', '_imagify_optimize_attachment', IMAGIFY_INT_MAX );
 
 		// Store the old backup file path.
 		add_filter( 'emr_unique_filename', array( $this, 'store_old_backup_path' ), 10, 3 );
@@ -98,7 +98,7 @@ class Imagify_Enable_Media_Replace {
 	}
 
 	/**
-	 * When the user choose the change the file name, store the old backup file path. This path will be used later to delete the file.
+	 * When the user chooses to change the file name, store the old backup file path. This path will be used later to delete the file.
 	 *
 	 * @since  1.6.9
 	 * @author Grégory Viguier
@@ -164,7 +164,7 @@ class Imagify_Enable_Media_Replace {
 			return $return_url;
 		}
 
-		$new_backup_path = $attachment->get_backup_path();
+		$new_backup_path = $attachment->get_raw_backup_path();
 
 		if ( $new_backup_path === $this->old_backup_path ) {
 			// We don't want to delete the new backup.
@@ -192,21 +192,8 @@ class Imagify_Enable_Media_Replace {
 			return $this->attachment;
 		}
 
-		$class_name       = get_imagify_attachment_class_name( 'wp', $this->attachment_id, 'enable_media_replace' );
-		$this->attachment = new $class_name( $this->attachment_id );
+		$this->attachment = get_imagify_attachment( 'wp', $this->attachment_id, 'enable_media_replace' );
 
 		return $this->attachment;
 	}
-}
-
-/**
- * Returns the main instance of the Imagify_Enable_Media_Replace class.
- *
- * @since 1.6.9
- * @author Grégory Viguier
- *
- * @return object The Imagify_Enable_Media_Replace instance.
- */
-function imagify_enable_media_replace() {
-	return Imagify_Enable_Media_Replace::get_instance();
 }

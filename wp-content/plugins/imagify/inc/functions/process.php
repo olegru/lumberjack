@@ -16,12 +16,13 @@ defined( 'ABSPATH' ) || die( 'Cheatin\' uh?' );
 function do_imagify( $file_path, $args = array() ) {
 	$errors = new WP_Error();
 	$args   = array_merge( array(
-		'backup'             => get_imagify_option( 'backup', false ),
+		'backup'             => get_imagify_option( 'backup' ),
 		'optimization_level' => get_imagify_option( 'optimization_level', 1 ),
-		'keep_exif'          => get_imagify_option( 'exif', false ),
+		'keep_exif'          => get_imagify_option( 'exif' ),
 		'context'            => 'wp',
 		'resized'            => false,
 		'original_size'      => 0,
+		'backup_path'        => null,
 	), $args );
 
 	/**
@@ -72,8 +73,8 @@ function do_imagify( $file_path, $args = array() ) {
 
 	// Check that file exists.
 	if ( 0 === $file_size ) {
-		/* translators: %s is a file size. */
-		$errors->add( 'image_not_found', sprintf( __( 'Skipped (%s), image not found.', 'imagify' ), size_format( $file_size ) ) );
+		/* translators: %s is a file path. */
+		$errors->add( 'image_not_found', sprintf( __( 'Skipped (%s), image not found.', 'imagify' ), '<code>' . imagify_make_file_path_relative( $file_path ) . '</code>' ) );
 		return $errors;
 	}
 
@@ -106,9 +107,9 @@ function do_imagify( $file_path, $args = array() ) {
 	}
 
 	// Create a backup file.
-	if ( 'wp' === $args['context'] && $args['backup'] && ! $args['resized'] ) {
+	if ( $args['backup'] && ! $args['resized'] ) {
 		// TODO (@Greg): Send an error message if the backup fails.
-		imagify_backup_file( $file_path );
+		imagify_backup_file( $file_path, $args['backup_path'] );
 	}
 
 	if ( ! function_exists( 'download_url' ) ) {
@@ -155,7 +156,7 @@ function imagify_do_async_job( $body ) {
 		'timeout'   => 0.01,
 		'blocking'  => false,
 		'body'      => $body,
-		'cookies'   => $_COOKIE,
+		'cookies'   => isset( $_COOKIE ) && is_array( $_COOKIE ) ? $_COOKIE : array(),
 		'sslverify' => apply_filters( 'https_local_ssl_verify', false ),
 	);
 
@@ -168,6 +169,28 @@ function imagify_do_async_job( $body ) {
 	 * @param array $args An array of arguments passed to wp_remote_post().
 	 */
 	$args = apply_filters( 'imagify_do_async_job_args', $args );
+
+	/**
+	 * It can be a XML-RPC request. The problem is that XML-RPC doesn't use cookies.
+	 */
+	if ( defined( 'XMLRPC_REQUEST' ) && get_current_user_id() ) {
+		/**
+		 * In old WP versions, the field "option_name" in the wp_options table was limited to 64 characters.
+		 * From 64, remove 19 characters for "_transient_timeout_" = 45.
+		 * Then remove 12 characters for "imagify_rpc_" (transient name) = 33.
+		 * Hopefully, a md5 is 32 characters long.
+		 */
+		$rpc_id = md5( maybe_serialize( $body ) );
+
+		// Send the request to our RPC bridge instead.
+		$args['body']['imagify_rpc_action'] = $args['body']['action'];
+		$args['body']['action']             = 'imagify_rpc';
+		$args['body']['imagify_rpc_id']     = $rpc_id;
+		$args['body']['imagify_rpc_nonce']  = wp_create_nonce( 'imagify_rpc_' . $rpc_id );
+
+		// Since we can't send cookies to keep the user logged in, store the user ID in a transient.
+		set_transient( 'imagify_rpc_' . $rpc_id, get_current_user_id(), 30 );
+	}
 
 	wp_remote_post( admin_url( 'admin-ajax.php' ), $args );
 }
@@ -194,10 +217,15 @@ function imagify_backup_file( $file_path, $backup_path = null ) {
 
 	$filesystem = imagify_get_filesystem();
 
+	// Make sure the filesystem has no errors.
+	if ( ! empty( $filesystem->errors->errors ) ) {
+		return new WP_Error( 'filesystem_error', __( 'Filesystem error.', 'imagify' ), $filesystem->errors );
+	}
+
 	// Make sure the source file exists.
 	if ( ! $filesystem->exists( $file_path ) ) {
 		return new WP_Error( 'source_doesnt_exist', __( 'The file to backup does not exist.', 'imagify' ), array(
-			'file_path' => imagify_make_file_path_replative( $file_path ),
+			'file_path' => imagify_make_file_path_relative( $file_path ),
 		) );
 	}
 
@@ -208,16 +236,11 @@ function imagify_backup_file( $file_path, $backup_path = null ) {
 		}
 
 		$backup_path = get_imagify_attachment_backup_path( $file_path );
-
-		// Make sure the uploads directory has no errors.
-		if ( ! $backup_path ) {
-			return new WP_Error( 'wp_upload_error', __( 'Error while retrieving the uploads directory path.', 'imagify' ) );
-		}
 	}
 
-	// Make sure the filesystem has no errors.
-	if ( ! empty( $filesystem->errors->errors ) ) {
-		return new WP_Error( 'filesystem_error', __( 'Filesystem error.', 'imagify' ), $filesystem->errors );
+	// Make sure the uploads directory has no errors.
+	if ( ! $backup_path ) {
+		return new WP_Error( 'wp_upload_error', __( 'Error while retrieving the uploads directory path.', 'imagify' ) );
 	}
 
 	// Create sub-directories.
@@ -241,8 +264,8 @@ function imagify_backup_file( $file_path, $backup_path = null ) {
 	// Make sure the backup copy exists.
 	if ( ! $filesystem->exists( $backup_path ) ) {
 		return new WP_Error( 'backup_doesnt_exist', __( 'The file could not be saved.', 'imagify' ), array(
-			'file_path'   => imagify_make_file_path_replative( $file_path ),
-			'backup_path' => imagify_make_file_path_replative( $backup_path ),
+			'file_path'   => imagify_make_file_path_relative( $file_path ),
+			'backup_path' => imagify_make_file_path_relative( $backup_path ),
 		) );
 	}
 

@@ -1,7 +1,7 @@
 <?php
 	/* Template Name: Главная */
 ?>
-<?php get_header(); ?>AAAAAAAAAAAAA
+<?php get_header(); ?>
 <div class="container-fluid padding-0">
 	<?php get_sidebar('sidebar'); ?>
 	<div class="content col-lg-10 col-xs-12 col-md-12">

@@ -20,7 +20,7 @@ function _imagify_display_bulk_page() {
 						<p class="imagify-meteo-subs"><?php _e( 'Your subscription:', 'imagify' ); ?>&nbsp;<strong class="imagify-user-plan"><?php echo $user->plan_label; ?></strong></p>
 					</div>
 					<div class="imagify-account-link">
-						<a href="<?php echo IMAGIFY_APP_MAIN; ?>/#/subscription" class="button button-ghost" target="_blank">
+						<a href="<?php echo esc_url( imagify_get_external_url( 'subscription' ) ); ?>" class="button button-ghost" target="_blank">
 							<span class="dashicons dashicons-admin-users"></span>
 							<span class="button-text"><?php _e( 'View My Subscription', 'imagify' ); ?></span>
 						</a>
@@ -72,7 +72,7 @@ function _imagify_display_bulk_page() {
 									</div>
 									<div class="cell-sep"></div>
 									<div class="cell-cta">
-										<a href="<?php echo IMAGIFY_APP_MAIN; ?>/#/subscription" target="_blank"><?php _e( 'More info', 'imagify' ); ?></a>
+										<a href="<?php echo esc_url( imagify_get_external_url( 'subscription' ) ); ?>" target="_blank"><?php _e( 'More info', 'imagify' ); ?></a>
 									</div>
 								</div>
 							</div>
@@ -138,7 +138,7 @@ function _imagify_display_bulk_page() {
 								<?php
 								printf(
 									/* translators: you can use %s to include a line break. */
-									__( 'that\'s the number of images you optimized with Imagify', 'imagify' ),
+									__( 'that\'s the number of original images you optimized with Imagify', 'imagify' ),
 									'<br>'
 								);
 								?>
@@ -154,8 +154,7 @@ function _imagify_display_bulk_page() {
 
 						<p><?php _e( 'Optimized size', 'imagify' ); ?></p>
 						<div class="imagify-bar-positive base-transparent right-outside-number">
-
-							<div id="imagify-optimized-bar" class="imagify-progress" style="width: <?php echo $optimized_percent; ?>%"><span class="imagify-barnb"><?php echo size_format( $optimized_nb, 1 ); ?></span></div>
+							<div id="imagify-optimized-bar" class="imagify-progress" style="width: <?php echo ( 100 - $optimized_percent ); ?>%"><span class="imagify-barnb"><?php echo size_format( $optimized_nb, 1 ); ?></span></div>
 						</div>
 
 					</div>
@@ -197,7 +196,16 @@ function _imagify_display_bulk_page() {
 							}
 							?>
 						</li>
-						<li><?php esc_html_e( 'You must keep this page open while the bulk optimization is processing. If you leave you can come back to continue where it left off.', 'imagify' ); ?></li>
+						<li>
+							<?php esc_html_e( 'You must keep this page open while the bulk optimization is processing. If you leave you can come back to continue where it left off.', 'imagify' ); ?>
+						</li>
+						<li class="imagify-documentation-link-box">
+							<span class="imagify-documentation-icon"><svg viewBox="0 0 15 20" xmlns="http://www.w3.org/2000/svg"><g fill="#40b1d0" fill-rule="nonzero"><g><path d="m14.583 20h-14.167c-.23 0-.417-.187-.417-.417v-14.167c0-.111.044-.217.122-.295l5-5c.078-.078.184-.122.295-.122h9.167c.23 0 .417.187.417.417v19.17c0 .23-.187.417-.417.417m-13.75-.833h13.333v-18.333h-8.578l-4.756 4.756v13.578"/><path d="m5.417 5.833h-5c-.23 0-.417-.187-.417-.417 0-.23.187-.417.417-.417h4.583v-4.583c0-.23.187-.417.417-.417.23 0 .417.187.417.417v5c0 .23-.187.417-.417.417"/></g><path d="m12.583 7h-9.167c-.23 0-.417-.224-.417-.5 0-.276.187-.5.417-.5h9.167c.23 0 .417.224.417.5 0 .276-.187.5-.417.5"/><path d="m12.583 5h-4.167c-.23 0-.417-.224-.417-.5 0-.276.187-.5.417-.5h4.167c.23 0 .417.224.417.5 0 .276-.187.5-.417.5"/><path d="m12.583 10h-9.167c-.23 0-.417-.224-.417-.5 0-.276.187-.5.417-.5h9.167c.23 0 .417.224.417.5 0 .276-.187.5-.417.5"/><path d="m12.583 13h-9.167c-.23 0-.417-.224-.417-.5 0-.276.187-.5.417-.5h9.167c.23 0 .417.224.417.5 0 .276-.187.5-.417.5"/><path d="m12.583 15h-9.167c-.23 0-.417-.224-.417-.5 0-.276.187-.5.417-.5h9.167c.23 0 .417.224.417.5 0 .276-.187.5-.417.5"/><path d="m12.583 18h-9.167c-.23 0-.417-.224-.417-.5 0-.276.187-.5.417-.5h9.167c.23 0 .417.224.417.5 0 .276-.187.5-.417.5"/></g></svg></span>
+							<span>
+								<?php _e( 'Need help or have questions?', 'imagify' ); ?>
+								<a class="imagify-documentation-link" href="<?php echo esc_url( imagify_get_external_url( 'documentation' ) ); ?>" target="_blank"><?php _e( 'Check our documentation.', 'imagify' ); ?></a>
+							<span>
+						</li>
 					</ul>
 				</div><!-- .col-1-2 -->
 			</div><!-- .imagify-columns -->
@@ -272,17 +280,19 @@ function _imagify_display_bulk_page() {
 								</button>
 							</p>
 						</div>
-						<div class="imagify-cell imagify-pl0">
-							<p class="imagify-info-block">
-								<?php
-								printf(
-									/* translators: %s is a file size. */
-									__( 'All images greater than %s will be optimized when using a paid plan.', 'imagify' ),
-									size_format( get_imagify_max_image_size() )
-								);
-								?>
-							</p>
-						</div>
+						<?php if ( ! is_wp_error( get_imagify_max_image_size() ) ) { ?>
+							<div class="imagify-cell imagify-pl0">
+								<p class="imagify-info-block">
+									<?php
+									printf(
+										/* translators: %s is a file size. */
+										__( 'All images greater than %s will be optimized when using a paid plan.', 'imagify' ),
+										size_format( get_imagify_max_image_size() )
+									);
+									?>
+								</p>
+							</div>
+						<?php } ?>
 					</div>
 				</div>
 			</div><!-- .imagify-bulk-submit -->
@@ -318,10 +328,10 @@ function _imagify_display_bulk_page() {
 						<p><?php _e( 'Share your awesome result', 'imagify' ); ?></p>
 						<ul class="imagify-share-networks">
 							<li>
-								<a target="_blank" class="imagify-sn-twitter" href=""><svg viewBox="0 0 23 18" width="23" height="18" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><title>Twitter</title><path d="m244.15 12.13c-.815.361-1.691.606-2.61.716.939-.563 1.659-1.453 1.998-2.514-.878.521-1.851.898-2.886 1.103-.829-.883-2.01-1.435-3.317-1.435-2.51 0-4.544 2.034-4.544 4.544 0 .356.04.703.118 1.035-3.777-.19-7.125-1.999-9.367-4.748-.391.671-.615 1.452-.615 2.285 0 1.576.802 2.967 2.02 3.782-.745-.024-1.445-.228-2.058-.568-.001.019-.001.038-.001.057 0 2.202 1.566 4.04 3.646 4.456-.381.104-.783.159-1.197.159-.293 0-.577-.028-.855-.081.578 1.805 2.256 3.119 4.245 3.156-1.555 1.219-3.515 1.945-5.644 1.945-.367 0-.728-.021-1.084-.063 2.01 1.289 4.399 2.041 6.966 2.041 8.359 0 12.929-6.925 12.929-12.929 0-.197-.004-.393-.013-.588.888-.64 1.658-1.44 2.268-2.352" transform="translate(-222-10)" fill="#fff"/></g></svg></a>
+								<a target="_blank" class="imagify-sn-twitter" href="<?php echo esc_url( imagify_get_external_url( 'share-twitter' ) ); ?>"><svg viewBox="0 0 23 18" width="23" height="18" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><title>Twitter</title><path d="m244.15 12.13c-.815.361-1.691.606-2.61.716.939-.563 1.659-1.453 1.998-2.514-.878.521-1.851.898-2.886 1.103-.829-.883-2.01-1.435-3.317-1.435-2.51 0-4.544 2.034-4.544 4.544 0 .356.04.703.118 1.035-3.777-.19-7.125-1.999-9.367-4.748-.391.671-.615 1.452-.615 2.285 0 1.576.802 2.967 2.02 3.782-.745-.024-1.445-.228-2.058-.568-.001.019-.001.038-.001.057 0 2.202 1.566 4.04 3.646 4.456-.381.104-.783.159-1.197.159-.293 0-.577-.028-.855-.081.578 1.805 2.256 3.119 4.245 3.156-1.555 1.219-3.515 1.945-5.644 1.945-.367 0-.728-.021-1.084-.063 2.01 1.289 4.399 2.041 6.966 2.041 8.359 0 12.929-6.925 12.929-12.929 0-.197-.004-.393-.013-.588.888-.64 1.658-1.44 2.268-2.352" transform="translate(-222-10)" fill="#fff"/></g></svg></a>
 							</li>
 							<li>
-								<a target="_blank" class="imagify-sn-twitter-facebook" href="<?php echo esc_url( 'https://www.facebook.com/sharer/sharer.php?u=https://wordpress.org/plugins/imagify' ); ?>"><svg viewBox="0 0 18 18" width="18" height="18" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><title>Facebook</title><path d="m203.25 10h-16.5c-.415 0-.75.336-.75.75v16.5c0 .414.336.75.75.75h8.812v-6.75h-2.25v-2.813h2.25v-2.25c0-2.325 1.472-3.469 3.546-3.469.993 0 1.847.074 2.096.107v2.43h-1.438c-1.128 0-1.391.536-1.391 1.322v1.859h2.813l-.563 2.813h-2.25l.045 6.75h4.83c.414 0 .75-.336.75-.75v-16.5c0-.414-.336-.75-.75-.75" transform="translate(-186-10)" fill="#fff"/></g></svg></a>
+								<a target="_blank" class="imagify-sn-facebook" href="<?php echo esc_url( imagify_get_external_url( 'share-facebook' ) ); ?>"><svg viewBox="0 0 18 18" width="18" height="18" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><title>Facebook</title><path d="m203.25 10h-16.5c-.415 0-.75.336-.75.75v16.5c0 .414.336.75.75.75h8.812v-6.75h-2.25v-2.813h2.25v-2.25c0-2.325 1.472-3.469 3.546-3.469.993 0 1.847.074 2.096.107v2.43h-1.438c-1.128 0-1.391.536-1.391 1.322v1.859h2.813l-.563 2.813h-2.25l.045 6.75h4.83c.414 0 .75-.336.75-.75v-16.5c0-.414-.336-.75-.75-.75" transform="translate(-186-10)" fill="#fff"/></g></svg></a>
 							</li>
 						</ul>
 					</div>

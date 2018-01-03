@@ -4,7 +4,7 @@ defined( 'ABSPATH' ) || die( 'Cheatin\' uh?' );
 /**
  * Round UP to nearest half integer.
  *
- * @since 1.0
+ * @since  1.0
  * @source http://stackoverflow.com/a/13526408
  *
  * @param  int|float|string $number  The number to round up.
@@ -47,10 +47,15 @@ function imagify_round_half_five( $number ) {
  */
 function get_imagify_attachment_class_name( $context, $attachment_id, $identifier ) {
 	$context = $context ? $context : 'wp';
+
+	if ( 'wp' !== $context && 'wp' === strtolower( $context ) ) {
+		$context = 'wp';
+	}
+
 	/**
 	 * Filter the context used for the optimization.
 	 *
-	 * @since 1.6.6
+	 * @since  1.6.6
 	 * @author Grégory Viguier
 	 *
 	 * @param string $context       The context.
@@ -60,4 +65,20 @@ function get_imagify_attachment_class_name( $context, $attachment_id, $identifie
 	$context = apply_filters( 'imagify_optimize_attachment_context', $context, $attachment_id, $identifier );
 
 	return 'Imagify_' . ( 'wp' !== $context ? $context . '_' : '' ) . 'Attachment';
+}
+
+/**
+ * Get the Imagify attachment instance depending to a context.
+ *
+ * @since  1.6.13
+ * @author Grégory Viguier
+ *
+ * @param  string $context       The context to determine the class name.
+ * @param  int    $attachment_id The attachment ID.
+ * @param  string $identifier    An identifier.
+ * @return object                The Imagify attachment instance.
+ */
+function get_imagify_attachment( $context, $attachment_id, $identifier ) {
+	$class_name = get_imagify_attachment_class_name( $context, $attachment_id, $identifier );
+	return new $class_name( $attachment_id );
 }

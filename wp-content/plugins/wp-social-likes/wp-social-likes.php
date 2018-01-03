@@ -2,12 +2,11 @@
 /*
 Plugin Name: Social Likes
 Description: Wordpress plugin for Social Likes library by Artem Sapegin (http://sapegin.me/projects/social-likes)
-Version: 6.3.18
-Author: TS Soft
-Author URI: http://ts-soft.ru/en/
+Version: 7.9.5
+Author: AltPress
 License: MIT
 
-Copyright 2016 TS Soft LLC (email: dev@ts-soft.ru )
+Copyright 2017 AltPress
 
 Permission is hereby granted, free of charge, to any person obtaining a 
 copy of this software and associated documentation files (the 
@@ -65,6 +64,8 @@ class wpsociallikes {
 		add_action('admin_menu', array(&$this, 'admin_menu'));
 		add_action('save_post', array(&$this, 'save_post_meta'));
 		add_filter('the_content', array(&$this, 'add_social_likes'));
+		add_filter('get_the_excerpt', array(&$this, 'get_the_excerpt'), 0);
+		add_filter('wp_trim_excerpt', array(&$this, 'wp_trim_excerpt'));
 
 		add_filter('plugin_action_links', array(&$this, 'add_action_links'), 10, 2);
 
@@ -277,7 +278,7 @@ class wpsociallikes {
 
 	function add_social_likes($content = '') {
 		global $post;
-		if (in_the_loop() && !is_feed() && get_post_meta($post->ID, 'sociallikes', true)
+		if (in_the_loop() && !is_feed() && !$this->is_excerpt && get_post_meta($post->ID, 'sociallikes', true)
 				&& (is_page() || is_single() || $this->options->excerpts || !$this->is_post_with_excerpt())) {
 			$this->lang = get_bloginfo('language');
 			$buttons = $this->build_buttons($post);
@@ -396,6 +397,16 @@ class wpsociallikes {
 		$main_div .= '</div><form style="display: none;" class="sociallikes-livejournal-form"></form>';
 
 		return $main_div;
+	}
+
+	function get_the_excerpt($text) {
+		$this->is_excerpt = true;
+		return $text;
+	}
+
+	function wp_trim_excerpt($text) {
+		$this->is_excerpt = false;
+		return $text;
 	}
 
 	function display_admin_form() {

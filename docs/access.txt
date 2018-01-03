@@ -1,0 +1,3 @@
+lumberjack.style/wp-admin
+Логин - admin
+Пароль - AlpaM.K2222

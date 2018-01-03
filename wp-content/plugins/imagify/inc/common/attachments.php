@@ -1,13 +1,13 @@
 <?php
 defined( 'ABSPATH' ) || die( 'Cheatin\' uh?' );
 
-add_filter( 'wp_generate_attachment_metadata', '_imagify_optimize_attachment', PHP_INT_MAX, 2 );
+add_filter( 'wp_generate_attachment_metadata', '_imagify_optimize_attachment', IMAGIFY_INT_MAX, 2 );
 /**
  * Auto-optimize when a new attachment is generated.
  *
  * @since 1.0
  * @since 1.5 Async job.
- * @see _do_admin_post_async_optimize_upload_new_media()
+ * @see   Imagify_Admin_Ajax_Post::imagify_async_optimize_upload_new_media_callback()
  *
  * @param  array $metadata      An array of attachment meta data.
  * @param  int   $attachment_id Current attachment ID.
@@ -15,7 +15,23 @@ add_filter( 'wp_generate_attachment_metadata', '_imagify_optimize_attachment', P
  */
 function _imagify_optimize_attachment( $metadata, $attachment_id ) {
 
-	if ( ! get_imagify_option( 'api_key' ) || ! get_imagify_option( 'auto_optimize' ) ) {
+	if ( ! imagify_valid_key() || ! get_imagify_option( 'auto_optimize' ) ) {
+		return $metadata;
+	}
+
+	/**
+	 * Allow to prevent automatic optimization for a specific attachment.
+	 *
+	 * @since  1.6.12
+	 * @author Grégory Viguier
+	 *
+	 * @param bool  $optimize      True to optimize, false otherwise.
+	 * @param int   $attachment_id Attachment ID.
+	 * @param array $metadata      An array of attachment meta data.
+	 */
+	$optimize = apply_filters( 'imagify_auto_optimize_attachment', true, $attachment_id, $metadata );
+
+	if ( ! $optimize ) {
 		return $metadata;
 	}
 
@@ -37,9 +53,7 @@ add_action( 'delete_attachment', '_imagify_delete_backup_file' );
  * @param int $post_id Attachment ID.
  */
 function _imagify_delete_backup_file( $post_id ) {
-	$class_name = get_imagify_attachment_class_name( 'wp', $post_id, 'delete_attachment' );
-	$attachment = new $class_name( $post_id );
-	$attachment->delete_backup();
+	get_imagify_attachment( 'wp', $post_id, 'delete_attachment' )->delete_backup();
 }
 
 add_action( 'shutdown', '_imagify_optimize_save_image_editor_file' );
@@ -54,9 +68,17 @@ function _imagify_optimize_save_image_editor_file() {
 		return;
 	}
 
-	check_ajax_referer( 'image_editor-' . $_POST['postid'] );
+	$attachment_id = absint( $_POST['postid'] );
 
-	if ( ! get_post_meta( $_POST['postid'], '_imagify_data', true ) ) {
+	if ( ! $attachment_id || ! imagify_valid_key() ) {
+		return;
+	}
+
+	check_ajax_referer( 'image_editor-' . $attachment_id );
+
+	$attachment = get_imagify_attachment( 'wp', $attachment_id, 'save_image_editor_file' );
+
+	if ( ! $attachment->get_data() ) {
 		return;
 	}
 

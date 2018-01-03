@@ -3,6 +3,7 @@ function SGMBLivePreview()
 	this.widget = '';
 	this.roundButton = '';
 	this.icon = 'default';
+	this.betweenSize = '1px'
 	this.iconEffect = jQuery("[name='iconsEffect']").val();
 	this.buttonsEffect = jQuery("[name='buttonsEffect']").val();
 }
@@ -17,6 +18,30 @@ SGMBLivePreview.prototype.setWidget = function(wdg)
 	this.widget = wdg;
 }
 
+SGMBLivePreview.prototype.addSelectboxValuesIntoInput = function() {
+
+	var selectedPages = [];
+	var selectedPosts = [];
+	var excludedPosts = [];
+	jQuery("#add-form").submit(function(e) {
+		var pages = jQuery("select[data-selectbox='sgmbSelectedPages'] > option:selected");
+		var posts = jQuery("select[data-selectbox='sgmbSelectedPosts'] > option:selected");
+		var excludPosts = jQuery("select[data-selectbox='sgmbExcludedPosts'] > option:selected");
+		for(i=0; i<pages.length; i++) {
+			selectedPages.push(pages[i].value);
+		}
+		for(i=0; i<posts.length; i++) {
+			selectedPosts.push(posts[i].value);
+		}
+		for(i=0; i<excludPosts.length; i++) {
+			excludedPosts.push(excludPosts[i].value);
+		}
+		jQuery(".sgmb-all-selected-page").val(selectedPages);
+		jQuery(".sgmb-all-selected-post").val(selectedPosts);
+		jQuery(".sgmb-all-excluded-post").val(excludedPosts);
+	});
+}
+
 SGMBLivePreview.prototype.init = function()
 {
 	var that = this;
@@ -24,20 +49,27 @@ SGMBLivePreview.prototype.init = function()
 	jQuery('.dropdownWrapper').hide();
 	jQuery('.sgmb-dropdown-advance-options').hide();
 	jQuery('.showEveryPostOptions').hide();
+	jQuery('.showCustomPostOptions').hide();
 	jQuery('.options-for-buttons-fixed-position').hide();
+	jQuery('.sgmb-show-in-popup-options').hide();
+	jQuery('.showEveryPageOptions').hide();
 	this.roundButton = jQuery('[name = roundButton]');
 	this.showLabels = jQuery('[name = showLabels]');
+	this.betweenSize = jQuery('.sgmb-betweenButtons').val();
+	this.addSelectboxValuesIntoInput();
 
 	jQuery(".js-social-btn-text").bind('input', function() {
 		var btnText = jQuery(this).val();
 		var btnName = jQuery(this).attr('data-social-button');
 		that.widget.changeButtonText(btnText, btnName);
 		that.widget.changeToRoundButtons(that.roundButton.is(':checked'));
+		that.widget.changeBetweenButtonsSize(that.betweenSize);
 	});
 
 	jQuery('[name = roundButton]').bind('change', function() {
 		var inputValue = jQuery(this).is(':checked');
  		that.widget.changeToRoundButtons(inputValue);
+ 		that.widget.changeBetweenButtonsSize(that.betweenSize);
 	});
 
 	jQuery('[name = showLabels]').bind('change', function() {
@@ -49,6 +81,7 @@ SGMBLivePreview.prototype.init = function()
 		that.widget.fbLikeParse();
 		that.widget.twitterFollowLoad();
 		that.widget.changeAttrOfButton();
+		that.widget.changeBetweenButtonsSize(that.betweenSize);
 	});
 
 	jQuery('[name = showCounts]').bind('change', function() {
@@ -60,6 +93,7 @@ SGMBLivePreview.prototype.init = function()
 		that.widget.fbLikeParse();
 		that.widget.twitterFollowLoad();
 		that.widget.changeAttrOfButton();
+		that.widget.changeBetweenButtonsSize(that.betweenSize);
 	});
 
 	jQuery('[name = showButtonsAsList]').bind('change', function() {
@@ -72,25 +106,33 @@ SGMBLivePreview.prototype.init = function()
  		that.widget.showButtonsAsList(inputValue);
 	});
 
+	jQuery('[name = selected-or-excluded-posts]').bind('change', function() {
+		var inputValue = jQuery(this).val();
+
+		if (inputValue == 'selected') {
+			that.widget.disabledSelectPostsOption(false);
+			that.widget.disabledExcludePostsOption(true);
+		}
+		else if (inputValue == 'excluded') {
+			that.widget.disabledSelectPostsOption(true);
+			that.widget.disabledExcludePostsOption(false);
+		}
+	});
+
 	jQuery('[name = showButtonsOnEveryPost]').bind('change', function() {
 		var inputValue = jQuery(this).is(':checked');
-		if(inputValue == true) {
-			jQuery('[name = setButtonsPosition]').attr('checked',false);
-			var inputValueSetButtonsPosition = jQuery('[name = setButtonsPosition]').is(':checked');
-			that.widget.showButtonsPositionChecked(inputValueSetButtonsPosition);
-		}
 		that.widget.showButtonsOnEveryPostChecked(inputValue);
 	});
 
 	jQuery('[name = setButtonsPosition]').bind('change', function() {
 		var inputValue = jQuery(this).is(':checked');
 		if(inputValue == true) {
-			jQuery('[name = showButtonsOnEveryPost]').attr('checked',false);
-			jQuery('[name = showButtonsAsList]').attr('checked',false);
-			var inputValueShowButtonsOnEveryPost = jQuery('[name = showButtonsOnEveryPost]').is(':checked');
+			jQuery('[name = showButtonsInPopup]').attr('checked', false);
+			jQuery('[name = showButtonsAsList]').attr('checked', false);
 			var inputValueShowButtonsAsList = jQuery('[name = showButtonsAsList]').is(':checked');
-			that.widget.showButtonsOnEveryPostChecked(inputValueShowButtonsOnEveryPost);
+			var inputValueShowButtonsInPopup = jQuery('[name = showButtonsInPopup]').is(':checked');
 			that.widget.showButtonsAsList(inputValueShowButtonsAsList);
+			that.widget.showButtonsInPopup(inputValueShowButtonsInPopup);
 		}
 		that.widget.showButtonsPositionChecked(inputValue);
 	});
@@ -112,6 +154,7 @@ SGMBLivePreview.prototype.init = function()
 		that.widget.changeToRoundButtons(that.roundButton.is(':checked'));
 		that.widget.changeButtonsEffect(that.buttonsEffect);
 		that.widget.changeIconsEffect(that.iconEffect);
+		that.widget.changeBetweenButtonsSize(that.betweenSize);
 	});
 
 	jQuery('.js-social-btn-status').on('dragComplete', function(e){
@@ -123,12 +166,14 @@ SGMBLivePreview.prototype.init = function()
 	jQuery("[name='fbLikeLayout']").bind('change',function() {
 		var fbLikeLayout = jQuery(this).val();
 		that.widget.setFbLikeLayout(fbLikeLayout);
+		that.widget.changeBetweenButtonsSize(that.betweenSize);
 	});
 
 	jQuery("[name='fbLikeActionType']").bind('change',function() {
 		var fbLikeActionType = jQuery(this).val();
 		that.widget.setFbLikeActionType(fbLikeActionType);
 		that.widget.twitterFollowLoad();
+		that.widget.changeBetweenButtonsSize(that.betweenSize);
 	});
 
 	jQuery('.js-social-btn-status').on('socialButtonHide', function(e){
@@ -138,17 +183,33 @@ SGMBLivePreview.prototype.init = function()
 		that.widget.changeToRoundButtons(that.roundButton.is(':checked'));
 		that.widget.changeButtonsEffect(that.buttonsEffect);
 		that.widget.changeIconsEffect(that.iconEffect);
+		that.widget.changeBetweenButtonsSize(that.betweenSize);
 	});
 
 	jQuery("[name='sgmbSocialButtonSize']").bind('change', function() {
 		var fontSize = jQuery(this).val();
 		that.widget.changeButtonSize(fontSize);
 		that.widget.changeToRoundButtons(that.roundButton.is(':checked'));
+		that.widget.changeBetweenButtonsSize(that.betweenSize);
+	});
+
+	jQuery("[name='betweenButtons']").bind('input', function() {
+		that.betweenSize = jQuery(this).val();
+		that.widget.changeBetweenButtonsSize(that.betweenSize);
 	});
 
 	jQuery("[name='sgmbDropdownLabelFontSize']").bind('change', function() {
 		var fontSize = jQuery(this).val();
 		that.widget.changeDropdownLabelSize(fontSize);
+	});
+
+	$('.sgmb-image-radio-content').bind('click', function() {
+		var theme = jQuery(this).find('input[type="radio"]').val();
+		var newTheme = sgmb.theme[theme]['socialTheme'];
+		that.icon = sgmb.theme[theme]['icons'];
+		that.switchTheme(newTheme,that.icon);
+		jQuery("[name='socialTheme']").val(newTheme);
+		jQuery("[name='logo']").val(that.icon);
 	});
 
 	jQuery("input:radio[name=theme]").bind('change', function() {
@@ -174,6 +235,48 @@ SGMBLivePreview.prototype.init = function()
 		that.iconEffect = jQuery(this).val();
 		that.widget.changeIconsEffect(that.iconEffect);
 	});
+
+	jQuery('.sgmbDropdownColor').wpColorPicker({
+		change: function() {
+			var sgmbColorPickerIsChange = jQuery(this);
+			that.widget.changeColorDropdown(sgmbColorPickerIsChange.val());
+		}
+	});
+
+	jQuery(".wp-picker-holder").bind('click', function() {
+		var selectedInput = jQuery(this).prev().find('.sgmbDropdownColor');
+		that.widget.changeColorDropdown(selectedInput.val());
+	});
+
+	jQuery(".sgmb-dropdown-color .wp-picker-clear").bind('click', function() {
+		that.widget.changeColorDropdown('#FC6D58');
+	});
+
+	jQuery('.sgmbDropdownLabelColor').wpColorPicker({
+		change: function() {
+			var sgmbColorPicker = jQuery(this);
+			that.widget.changeColorDropdownLabel(sgmbColorPicker.val());
+		}
+	});
+
+	jQuery(".wp-picker-holder").bind('click', function() {
+		var selectedInput = jQuery(this).prev().find('.sgmbDropdownLabelColor');
+		that.widget.changeColorDropdownLabel(selectedInput.val());
+	});
+
+	jQuery(".sgmb-Dropdown-label-Color .wp-picker-clear").bind('click', function() {
+		that.widget.changeColorDropdownLabel('#fff');
+	});
+
+	jQuery('[name = twitterFollowShowCounts]').bind('change', function() {
+		var inputValue = jQuery(this).is(':checked');
+		that.widget.showCountsForTwitterFollow(inputValue);
+	});
+
+	jQuery('[name = setLargeSizeForTwitterFollow]').bind('change', function() {
+		var inputValue = jQuery(this).is(':checked');
+		that.widget.setLargeSizeForTwitterFollow(inputValue);
+	});
 }
 
 SGMBLivePreview.prototype.currentTheme = 'classic';
@@ -191,5 +294,7 @@ SGMBLivePreview.prototype.switchTheme = function(newTheme, icon) {
 	that.widget.changeToRoundButtons(that.roundButton.is(':checked'));
 	that.widget.changeButtonsEffect(that.buttonsEffect);
 	that.widget.changeIconsEffect(that.iconEffect);
+	that.widget.fbLikeParse();
+	that.widget.twitterFollowLoad();
 	that.widget.changeAttrOfButton();
 }

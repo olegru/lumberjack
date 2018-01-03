@@ -3,12 +3,13 @@
 Plugin Name: Saphali Woocommerce Russian
 Plugin URI: http://saphali.com/saphali-woocommerce-plugin-wordpress
 Description: Saphali Woocommerce Russian - это бесплатный вордпресс плагин, который добавляет набор дополнений к интернет-магазину на Woocommerce.
-Version: 1.6.4
+Version: 1.8.1
 Author: Saphali
 Author URI: http://saphali.com/
 Text Domain: saphali-woocommerce-lite
 Domain Path: /languages
-
+WC requires at least: 1.6.6
+WC tested up to: 3.2.6
 */
 
 
@@ -34,10 +35,11 @@ Domain Path: /languages
   
   // Подключение валюты и локализации
  define('SAPHALI_PLUGIN_DIR_URL',plugin_dir_url(__FILE__));
- define('SAPHALI_LITE_VERSION', '1.6.4' );
+ define('SAPHALI_LITE_VERSION', '1.8.1' );
  define('SAPHALI_PLUGIN_DIR_PATH',plugin_dir_path(__FILE__));
  class saphali_lite {
  var $email_order_id;
+ var $fieldss;
  var $column_count_saphali;
 	function __construct() {
 		if ( version_compare( WOOCOMMERCE_VERSION, '2.2.0', '<' ) || version_compare( WOOCOMMERCE_VERSION, '2.5.0', '>' ) )
@@ -96,6 +98,252 @@ Domain Path: /languages
 			add_filter( 'woocommerce_admin_billing_fields', array($this,'woocommerce_admin_billing_fields'), 10, 1 );
 			add_filter( 'woocommerce_admin_shipping_fields', array($this,'woocommerce_admin_shipping_fields'), 10, 1 );
 		}
+		add_action("wp_footer", array($this,'print_script_payment_method') );
+		if( version_compare( WOOCOMMERCE_VERSION, '3.0.0', '<' ) )
+		add_action( 'woocommerce_after_checkout_validation', array( $this, 'after_checkout_validation' ), 10 );
+		else
+		add_action( 'woocommerce_after_checkout_validation', array( $this, 'after_checkout_validation' ), 10, 2 );
+	}
+	
+	public function remove_no_valid_filds($key, $value, $errors) {
+		if (  version_compare( WOOCOMMERCE_VERSION, '3.0.0', '<' ) ) {
+			$is_e = true;
+			if( version_compare( WOOCOMMERCE_VERSION, '2.1', '<' ) ) {
+				global $woocommerce;
+				if(!empty($woocommerce->errors)) {
+					foreach($woocommerce->errors as $i => $_e) {
+						if( strpos($_e, strtolower($value["rf"]) ) !== false || strpos($_e, $value["rf"]) !== false ) {
+							unset($woocommerce->errors[$i]);
+						} 
+					}
+				}
+			} else {
+				$s = WC()->session;
+				$notices = $s->get( 'wc_notices', array() );
+				if( isset( $notices['error'] ) ) {
+					foreach($notices['error'] as $i => $_e) {
+						if( strpos($_e, strtolower($value["rf"]) ) !== false || strpos($_e, $value["rf"]) !== false ) {
+							unset($notices['error'][$i]);
+						} 
+					}
+				}
+				
+				if(empty($notices['error'])) {
+					unset($notices['error']);
+				}
+				$s->set( 'wc_notices', $notices );
+			}
+			
+		} else {
+			if( is_wp_error($errors) ) {
+				$is_e = true;
+				if( isset( $errors->errors["required-field"] ) ) {
+					foreach($errors->errors["required-field"] as $i => $_e) {
+						if( strpos($_e, strtolower(__($value["rf"], 'woocommerce')) ) !== false || strpos($_e, __($value["rf"], 'woocommerce')) !== false ) {
+							unset($errors->errors["required-field"][$i]);
+						} 
+					}
+					
+				}
+			}
+		}
+		return $is_e;
+	}
+	public function after_checkout_validation( $data, $errors = array() ) {	
+		if(! isset($this->fieldss) )
+			$this->fieldss = get_option('woocommerce_saphali_filds_filters');
+		$fieldss = $this->fieldss;
+		$keys = array();
+		foreach(array('billing', 'shipping') as  $type) {
+			foreach($fieldss[$type] as $key => $value) {
+				if(isset($value['payment_method'])) {
+					$pm_k_remove = array();
+					foreach($value['payment_method'] as $k => $v) {
+						if($v === '0') {
+							$pm_k_remove[] = $k;
+						}
+					}
+					foreach($pm_k_remove as $k_remove) {
+						unset($value['payment_method'][$k_remove]);
+					}
+				}
+				if(isset($value['payment_method']) && !empty($value['payment_method'])) {
+					$r = ( isset($value["required"]) && $value["required"] );
+					$keys[ $key ] = array( 'pm' => $value['payment_method'], 'r' => $r, 'rf' => $value["label"], 'type' => $type );
+				}
+				if(isset($value['shipping_method'])) {
+					$pm_k_remove = array();
+					foreach($value['shipping_method'] as $k => $v) {
+						if($v === '0') {
+							$pm_k_remove[] = $k;
+						}
+					}
+					foreach($pm_k_remove as $k_remove) {
+						unset($value['shipping_method'][$k_remove]);
+					}
+				}
+				if(isset($value['shipping_method']) && !empty($value['shipping_method'])) {
+					$r = ( isset($value["required"]) && $value["required"] );
+					$keys[ $key ] = array( 'pm' => $value['shipping_method'], 'r' => $r, 'rf' => $value["label"], 'type' => $type );
+				}
+			}
+		}
+		$is_e = false;
+		foreach($keys as $key => $value) {
+			if( $value["r"] ) {
+				if(in_array($_POST['payment_method'], $value["pm"]) ) {
+					if( empty($_POST[$key])) {
+						$is_e = $this->remove_no_valid_filds($key, $value, $errors);
+						if( version_compare( WOOCOMMERCE_VERSION, '3.0.0', '<' ) ) {
+							if( !version_compare( WOOCOMMERCE_VERSION, '2.6.0', '<' ) ) 
+							$this->comp_woocomerce_mess_error( sprintf( _x( '%s is a required field.', 'FIELDNAME is a required field.', 'woocommerce' ), '<strong>' . $value["rf"] . '</strong>' ) );
+							else 
+							$this->comp_woocomerce_mess_error( '<strong>' . $value["rf"] . '</strong> ' . __( 'is a required field.', 'woocommerce' ) );
+						} else {
+							switch ($value["type"]) {
+								case 'shipping' :
+									/* translators: %s: field name */
+									$field_label = __( 'Shipping %s', 'woocommerce' );
+								break;
+								case 'billing' :
+									/* translators: %s: field name */
+									$field_label = __( 'Billing %s', 'woocommerce' );
+								break;
+							}
+							$fl = function_exists('mb_strtolower') ? mb_strtolower(  sprintf( __( '%s is a required field.', 'woocommerce' ), '<strong>' . $value["rf"] . '</strong>' ) ) :  sprintf( __( '%s is a required field.', 'woocommerce' ), '<strong>' . $value["rf"] . '</strong>' );
+							$this->comp_woocomerce_mess_error( sprintf( $field_label, $fl ) );
+						}
+					}
+				} else {
+					if( empty($_POST[$key])) {
+						$is_e = $this->remove_no_valid_filds($key, $value, $errors);
+					}
+				}
+				$s_m = in_array($_POST['shipping_method'], $value["pm"]) || in_array($_POST['shipping_method'][0], $value["pm"]) || in_array( preg_replace('/\:(.*)$/', '', $_POST['shipping_method'][0]), $value["pm"]);
+				if( $s_m ) {
+					if( empty($_POST[$key])) {
+						$is_e = $this->remove_no_valid_filds($key, $value, $errors);
+						if( version_compare( WOOCOMMERCE_VERSION, '3.0.0', '<' ) ) {
+							if( !version_compare( WOOCOMMERCE_VERSION, '2.6.0', '<' ) ) 
+							$this->comp_woocomerce_mess_error( sprintf( _x( '%s is a required field.', 'FIELDNAME is a required field.', 'woocommerce' ), '<strong>' . $value["rf"] . '</strong>' ) );
+							else 
+							$this->comp_woocomerce_mess_error( '<strong>' . $value["rf"] . '</strong> ' . __( 'is a required field.', 'woocommerce' ) );
+						} else {
+							switch ($value["type"]) {
+								case 'shipping' :
+									/* translators: %s: field name */
+									$field_label = __( 'Shipping %s', 'woocommerce' );
+								break;
+								case 'billing' :
+									/* translators: %s: field name */
+									$field_label = __( 'Billing %s', 'woocommerce' );
+								break;
+							}
+							$fl = function_exists('mb_strtolower') ? mb_strtolower(  sprintf( __( '%s is a required field.', 'woocommerce' ), '<strong>' . $value["rf"] . '</strong>' ) ) :  sprintf( __( '%s is a required field.', 'woocommerce' ), '<strong>' . $value["rf"] . '</strong>' );
+							$this->comp_woocomerce_mess_error( sprintf( $field_label, $fl ) );
+						}
+					}
+				} else {
+					if( empty($_POST[$key])) {
+						$is_e = $this->remove_no_valid_filds($key, $value, $errors);
+					}
+				}
+			}
+		}
+		if($is_e &&  !version_compare( WOOCOMMERCE_VERSION, '3.0.0', '<' ) ) {
+			if(empty( $errors->errors["required-field"] ) )
+				$errors->remove( 'required-field' );
+		}
+	}
+	function comp_woocomerce_mess_error ($m) {
+		if( version_compare( WOOCOMMERCE_VERSION, '2.1', '<' ) ) {
+			global $woocommerce;
+			$woocommerce->add_error( $m );
+		} else {
+			wc_add_notice( $m, 'error' );
+		}
+	}
+	function print_script_payment_method() {
+		if(! isset($this->fieldss) )
+			$this->fieldss = get_option('woocommerce_saphali_filds_filters');
+		$fieldss = $this->fieldss;
+		
+		foreach(array('billing', 'shipping') as  $type) {
+			if(isset($fieldss[$type]) && is_array($fieldss[$type])) {
+				foreach($fieldss[$type] as $key => $value) {
+					if(isset($value['payment_method'])) {
+						$pm_k_remove = array();
+						if(is_array($value['payment_method']))
+						foreach($value['payment_method'] as $k => $v) {
+							if($v === '0') {
+								$pm_k_remove[] = $k;
+							}
+						}
+						foreach($pm_k_remove as $k_remove) {
+							unset($value['payment_method'][$k_remove]);
+						}
+					}
+					if(isset($value['payment_method']) && !empty($value['payment_method'])) {
+						$keys[ $key ] = $value['payment_method'];
+					}
+					if(isset($value['shipping_method'])) {
+						$pm_k_remove = array();
+						if(is_array($value['shipping_method']))
+						foreach($value['shipping_method'] as $k => $v) {
+							if($v === '0') {
+								$pm_k_remove[] = $k;
+							}
+						}
+						foreach($pm_k_remove as $k_remove) {
+							unset($value['shipping_method'][$k_remove]);
+						}
+					}
+					if(isset($value['shipping_method']) && !empty($value['shipping_method'])) {
+						$skeys[ $key ] = $value['shipping_method'];
+					}
+				}
+			}
+		}
+		?>
+		<script>
+		var $keys = <?php if( isset($keys) ) echo json_encode($keys); else echo '[]'; ?>;
+		var $skeys = <?php if( isset($skeys) ) echo json_encode($skeys); else echo '[]'; ?>;
+		function corect_payment_method_filds () {
+			var selected_p_method = jQuery("input[name=\"payment_method\"]:checked").val();
+			jQuery.each($keys, function(i,e){		
+				if( jQuery.inArray( selected_p_method, e ) >= 0 ) {
+					if( ! ( jQuery("#billing_platelshik_is_grpl").is(':checked') && ( i == 'billing_gruzopoluch' || i == 'billing_gruzopoluch_okpo') ) )
+					jQuery("#" + i + "_field").show('slow');
+				} else {
+					jQuery("#" + i + "_field").hide('slow');
+				}
+			});
+		}
+		function corect_shipping_method_filds () {
+			var selected_s_method = typeof jQuery("input.shipping_method:checked, input.shipping_method[type=\"hidden\"], select.shipping_method").val() != 'undefined' ? jQuery("input.shipping_method:checked, input.shipping_method[type=\"hidden\"], select.shipping_method").val().split(":")[0] : '';
+			jQuery.each($skeys, function(i,e){		
+				if( jQuery.inArray( selected_s_method, e ) >= 0 ) {
+					jQuery("#" + i + "_field").show('slow');
+				} else {
+					jQuery("#" + i + "_field").hide('slow');
+				}
+			});
+		}
+		jQuery("body").delegate("input[name=\"payment_method\"]", 'click', function(){
+			corect_payment_method_filds ();
+		});
+		jQuery("body").delegate("input.shipping_method", 'click', function(){
+			corect_shipping_method_filds ();
+		});
+		jQuery("body").delegate("select.shipping_method", 'change', function(){
+			corect_shipping_method_filds ();
+		});
+		jQuery('body').bind('updated_checkout', function() {
+			corect_payment_method_filds ();
+			corect_shipping_method_filds ();
+		});
+		</script>
+		<?php
 	}
 	function formatted_billing_address($address, $order) {
 		$billing_data = $this->woocommerce_get_customer_meta_fields_saphali();
@@ -259,8 +507,19 @@ Domain Path: /languages
 	}
 	public function woocommerce_default_address_fields($locale) {
 		$fieldss = get_option('woocommerce_saphali_filds_locate');
-		if(is_array($fieldss))
- 		$locale = $fieldss;
+		if(is_array($fieldss)) {
+			foreach($fieldss as $_k => $_v) {
+				$_fieldss[$_k] = $_v;
+				if(isset($_v['label'])) {
+					$_fieldss[$_k]['label'] = __( $_v['label'], 'woocommerce');
+				}
+				if(isset($_v['placeholder'])) {
+					$_fieldss[$_k]['placeholder'] = __( $_v['placeholder'], 'woocommerce');
+				}
+			}
+			$locale = $_fieldss;			
+		}
+
 		return $locale;
 	}
 	public function woocommerce_get_country_locale($locale) {
@@ -414,6 +673,7 @@ Domain Path: /languages
 					}
 				}
 				 else	$f = $woocommerce->checkout; 
+				 $global_f_checkout_fields = $f->checkout_fields;
 				if($_POST){
 					if(@$_POST["reset"] != 'All') {
 						// Управление новыми полями
@@ -478,16 +738,16 @@ Domain Path: /languages
 							unset($_POST["order"]["new_fild"]);
 						}
 						//END 
-						$filds = $f->checkout_fields;
+						$filds = $global_f_checkout_fields;
 
 						if(is_array($filds["billing"])) {
-						if(!is_array($addFild["billing"])) $addFild["billing"] = array();
+						if(!isset($addFild["billing"]) || isset($addFild["billing"]) && !is_array($addFild["billing"])) $addFild["billing"] = array();
 						if(!is_array($_POST["billing"])) $_POST["billing"] = array();
 						$filds["billing"] = array_merge($filds["billing"] ,  $_POST["billing"], $addFild["billing"]);
 
 						foreach($filds["billing"] as $key_post => $value_post) {
 							
-							if( !isset($f->checkout_fields["billing"][$key_post]['type']) && $filds["billing"][$key_post]['type'] != 'select' && $filds["billing"][$key_post]['type'] != 'checkbox' && $filds["billing"][$key_post]['type'] != 'textarea' ) unset($filds["billing"][$key_post]['type'],  $value_post["type"]);
+							if( !isset($global_f_checkout_fields["billing"][$key_post]['type']) &&  (isset($filds["billing"][$key_post]['type']) && $filds["billing"][$key_post]['type'] != 'select' && $filds["billing"][$key_post]['type'] != 'checkbox' && $filds["billing"][$key_post]['type'] != 'textarea' || !isset($filds["billing"][$key_post]['type']))  ) unset($filds["billing"][$key_post]['type'],  $value_post["type"]);
 
 							
 								if(@$filds["billing"][$key_post]['public'] != 'on') {
@@ -508,13 +768,13 @@ Domain Path: /languages
 						}
 
 						}
-						if(is_array($filds["shipping"])) {
-						if(!is_array($addFild["shipping"])) $addFild["shipping"] = array();
+						if(isset($filds["shipping"]) && is_array($filds["shipping"])) {
+						if(!isset($addFild["shipping"]) || isset($addFild["shipping"]) && !is_array($addFild["shipping"])) $addFild["shipping"] = array();
 						if(!is_array($_POST["shipping"])) $_POST["shipping"] = array();
 						$filds["shipping"] = array_merge($filds["shipping"] ,  $_POST["shipping"], $addFild["shipping"]);
 						foreach($filds["shipping"] as $key_post => $value_post) {
 							
-							if( !isset($f->checkout_fields["shipping"][$key_post]['type']) ) unset($filds["shipping"][$key_post]['type'],  $value_post["type"]);
+							if( !isset($global_f_checkout_fields["shipping"][$key_post]['type']) ) unset($filds["shipping"][$key_post]['type'],  $value_post["type"]);
 							
 							if($filds["shipping"][$key_post]['public'] != 'on') {
 								$filds_new["shipping"][$filds["shipping"][$key_post]["order"]][$key_post]["public"] = false;
@@ -531,8 +791,8 @@ Domain Path: /languages
 							unset($_POST["shipping"][$key_post]);
 						}
 						}
-						if(is_array($filds["order"])) {
-						if(!is_array($addFild["order"])) $addFild["order"] = array();
+						if(isset($filds["order"]) && is_array($filds["order"])) {
+						if(!isset($addFild["order"]) || isset($addFild["order"]) && !is_array($addFild["order"])) $addFild["order"] = array();
 						if(!is_array($_POST["order"])) $_POST["order"] = array();
 						$filds["order"] = array_merge($filds["order"] ,  $_POST["order"], $addFild["order"]);
 						
@@ -578,18 +838,18 @@ Domain Path: /languages
 								unset($filds_finish_filter["billing"][$v_filt]);
 							}
 						}
-						if(is_array($fild_remove_filter["shipping"])) {
+						if(isset($fild_remove_filter["shipping"]) && is_array($fild_remove_filter["shipping"])) {
 							foreach($fild_remove_filter["shipping"] as $v_filt){
 								unset($filds_finish_filter["shipping"][$v_filt]);
 							}
 						}
-						if(is_array($fild_remove_filter["order"])) {
+						if(isset($fild_remove_filter["order"]) && is_array($fild_remove_filter["order"])) {
 							foreach($fild_remove_filter["order"] as $v_filt){
 								unset($filds_finish_filter["order"][$v_filt]);
 							}
 						}
-						if(!update_option('woocommerce_saphali_filds',$filds_finish))add_option('woocommerce_saphali_filds',$filds_finish);
-						if(!update_option('woocommerce_saphali_filds_filters',$filds_finish_filter))add_option('woocommerce_saphali_filds_filters',$filds_finish_filter);
+						update_option('woocommerce_saphali_filds',$filds_finish);
+						update_option('woocommerce_saphali_filds_filters',$filds_finish_filter);
 						foreach($filds_finish_filter['billing'] as $k_f => $v_f) {
 							$new_key = str_replace('billing_', '' , $k_f);
 							if(in_array($new_key, array('country', 'first_name', 'last_name', 'company', 'address_1', 'address_2', 'city', 'state', 'postcode' ) ))
@@ -622,9 +882,10 @@ Domain Path: /languages
 					<th width="130px">Класс поля<img class="help_tip" data-tip="<h3 style='margin:0;padding:0'>Задает стиль текущего поля</h3><ul style='text-align: left;'><li><span style='color: #000'>form-row-first</span>&nbsp;&ndash;&nbsp;первый в строке;</li><li><span style='color: #000'>form-row-last</span>&nbsp;&ndash;&nbsp;последний в строке.</li></ul><hr /><span style='color: #000'>ЕСЛИ ОСТАВИТЬ ПУСТЫМ</span>, то поле будет отображаться на всю ширину. Соответственно, в предыдущем поле (которое выше) нужно отметить &laquo;Clear&raquo;." src="<?php bloginfo('wpurl');?>/wp-content/plugins/woocommerce/assets/images/help.png" /></th>
 				<th  width="40px">Тип поля</th>
 				<th  width="40px">Обя&shy;за&shy;те&shy;ль&shy;ное</th>
-
+				
 				<th  width="40px">Опу&shy;бли&shy;ко&shy;вать</th>
-			
+				<th  width="120px">Метод оплаты</th>
+				<th  width="120px">Метод доставки</th>
 				<th width="65px">Удалить/До&shy;ба&shy;вить</th>
 			</tr>
 		</thead>
@@ -636,11 +897,12 @@ Domain Path: /languages
 				<th width="35px">Clear<img class="help_tip" data-tip="Указывает на то, что следующее поле за текущим, будет начинаться с новой строки." src="<?php  bloginfo('wpurl');?>/wp-content/plugins/woocommerce/assets/images/help.png" /> </th>
 				<th>Класс поля</th>
 				<th  width="40px">Тип поля</th>
-					<th  width="40px">Обя&shy;за&shy;те&shy;ль&shy;ное</th>
+				<th  width="40px">Обя&shy;за&shy;те&shy;ль&shy;ное</th>
 
-					<th  width="40px">Опу&shy;бли&shy;ко&shy;вать</th>
-					
-					<th>Удалить/До&shy;ба&shy;вить</th>
+				<th  width="40px">Опу&shy;бли&shy;ко&shy;вать</th>
+				<th  width="120px">Метод оплаты</th>
+				<th  width="120px">Метод доставки</th>
+				<th>Удалить/До&shy;ба&shy;вить</th>
 				</tr>
 			</tfoot>
 			<tbody id="the-list" class="myTable">
@@ -650,10 +912,45 @@ Domain Path: /languages
 
 				$checkout_fields = get_option('woocommerce_saphali_filds');
 				
-				if( isset($checkout_fields["billing"]) && is_array($checkout_fields["billing"])) $f->checkout_fields["billing"] = $checkout_fields["billing"];
+				if( isset($checkout_fields["billing"]) && is_array($checkout_fields["billing"])) $global_f_checkout_fields["billing"] = $checkout_fields["billing"];
 				if( isset($f) )
-				foreach($f->checkout_fields["billing"] as $key => $value) {
-					if(empty($value['public']) && !is_array($checkout_fields["billing"])) $value['public'] = true;
+				foreach($global_f_checkout_fields["billing"] as $key => $value) {	
+				
+					$public = 'public';
+					if( !version_compare( WOOCOMMERCE_VERSION, '3.0', '<' ) ) {
+						if( isset( $checkout_fields["billing"][$key][$public] ) ) $value[$public] = $checkout_fields["billing"][$key][$public];
+						elseif( isset( $checkout_fields["billing"][$key] ) ) {
+							$value[$public] = '';
+						}
+					}
+					if(isset($checkout_fields["billing"][$key]['payment_method'])) {
+						$pm_k_remove = array();
+						foreach($checkout_fields["billing"][$key]['payment_method'] as $k => $v) {
+							if($v === '0') {
+								$pm_k_remove[] = $k;
+							}
+						}
+						
+						foreach($pm_k_remove as $k_remove) {
+							unset($checkout_fields["billing"][$key]['payment_method'][$k_remove]);
+						}
+						if( isset( $checkout_fields["billing"][$key] ) ) $value['payment_method'] = $checkout_fields["billing"][$key]['payment_method'];
+					}
+					if(isset($checkout_fields["billing"][$key]['shipping_method'])) {
+						$pm_k_remove = array();
+						foreach($checkout_fields["billing"][$key]['shipping_method'] as $k => $v) {
+							if($v === '0') {
+								$pm_k_remove[] = $k;
+							}
+						}
+						
+						foreach($pm_k_remove as $k_remove) {
+							unset($checkout_fields["billing"][$key]['shipping_method'][$k_remove]);
+						}
+						if( isset( $checkout_fields["billing"][$key] ) ) $value['shipping_method'] = $checkout_fields["billing"][$key]['shipping_method'];
+					}
+					
+					if(empty($value[$public]) && !is_array($checkout_fields["billing"])) $value[$public] = true;
 					?>
 					<tr>
 						<td> <input  disabled value='<?php echo $key?>' type="text" name="billing[<?php echo $key?>][name]" /></td>
@@ -681,8 +978,29 @@ Domain Path: /languages
 					<?php echo (!isset($value['type']) || $value['type'] == 'select'|| $value['type'] == 'checkbox'|| $value['type'] == 'textarea') ? 'Text' : $value['type']; ?> <input <?php  if(isset($value['type']) && $value['type'] == $value['type'] && $value['type'] != 'select'&& $value['type'] != 'textarea'&& $value['type'] != 'checkbox') echo 'checked'?> type="radio" name="billing[<?php  echo $key?>][type]" value="<?php if( isset($value['type']) && $value['type'] != 'select' && $value['type'] != 'textarea'&& $value['type'] != 'checkbox') echo $value['type']; ?>"  />
 					</td>
 						<td><input <?php if( isset($value['required'] ) && $value['required']) echo 'checked'?> type="checkbox" name="billing[<?php echo $key?>][required]" /></td>
-						<td><input <?php if(isset($value['public']) && $value['public']) echo 'checked';?> type="checkbox" name="billing[<?php echo $key?>][public]" /></td>
-						
+						<td><input <?php if(isset($value[$public]) && $value[$public]) echo 'checked';?> type="checkbox" name="billing[<?php echo $key?>][<?php echo $public; ?>]" /></td>
+						<td>
+						<select multiple="multiple" width="120px" name="billing[<?php echo $key?>][payment_method][]">
+							<option value="0"<?php if( isset($value['payment_method']) && ( in_array('0', $value['payment_method']) || empty($value['payment_method']) ) || !isset($value['payment_method']) ) echo 'selected';?>>Все</option>
+							<?php 
+								foreach ( $woocommerce->payment_gateways->payment_gateways() as $gateway ) {
+									if ( $gateway->enabled != 'yes' ) continue;
+									?><option value="<?php echo $gateway->id; ?>" <?php if(isset($value['payment_method']) && in_array($gateway->id, $value['payment_method']) ) echo 'selected';?>><?php echo $gateway->title; ?></option><?php
+								} 
+							?>
+						</select>
+						</td>
+						<td>
+						<select multiple="multiple" width="120px" name="billing[<?php echo $key?>][shipping_method][]">
+							<option value="0"<?php if( isset($value['shipping_method']) && ( in_array('0', $value['shipping_method']) || empty($value['shipping_method']) ) || !isset($value['shipping_method']) ) echo 'selected';?>>Все</option>
+							<?php 
+								foreach ( $woocommerce->shipping->get_shipping_methods() as $act_id => $shipping ) {
+									if ( $shipping->enabled != 'yes' ) continue;
+									?><option value="<?php echo $act_id; ?>" <?php if(isset($value['shipping_method']) && in_array($act_id, $value['shipping_method']) ) echo 'selected';?>><?php echo $shipping->title ? $shipping->title: $shipping->method_title; ?></option><?php
+								} 
+							?>
+						</select>
+						</td>
 						<td><input rel="sort_order" id="order_count" type="hidden" name="billing[<?php echo $key?>][order]" value="<?php echo $count?>" />
 						<input type="button" class="button" id="billing_delete" value="Удалить -"/></td>
 					</tr>
@@ -698,8 +1016,9 @@ Domain Path: /languages
 						<td></td>
 
 						<td></td>
+						<td></td>
 						
-						<td><input type="button" class="button"  id="billing" value="Добавить +"/></td>
+						<td colspan="2"><input type="button" class="button"  id="billing" value="Добавить +"/></td>
 				</tr>
 			</tbody>
 			</table>
@@ -716,7 +1035,8 @@ Domain Path: /languages
 					<th  width="40px">Обя&shy;за&shy;те&shy;ль&shy;ное</th>
 
 					<th  width="40px">Опу&shy;бли&shy;ко&shy;вать</th>
-				
+					<th  width="120px">Метод оплаты</th>
+					<th  width="120px">Метод доставки</th>
 					<th width="65px">Удалить/До&shy;ба&shy;вить</th>
 				</tr>
 			</thead>
@@ -730,22 +1050,53 @@ Domain Path: /languages
 					<th  width="40px">Обя&shy;за&shy;те&shy;ль&shy;ное</th>
 
 					<th  width="40px">Опу&shy;бли&shy;ко&shy;вать</th>
-					
+					<th  width="120px">Метод оплаты</th>
+					<th  width="120px">Метод доставки</th>
 					<th>Удалить/До&shy;ба&shy;вить</th>
 				</tr>
 			</tfoot>
 			<tbody id="the-list" class="myTable">
 				<?php $count = 0; 
-				if(isset($checkout_fields["shipping"]) && is_array($checkout_fields["shipping"])) $f->checkout_fields["shipping"] = $checkout_fields["shipping"];
-				if( isset( $f->checkout_fields["shipping"] ) )
-				foreach($f->checkout_fields["shipping"] as $key => $value) {	
+				if(isset($checkout_fields["shipping"]) && is_array($checkout_fields["shipping"])) $global_f_checkout_fields["shipping"] = $checkout_fields["shipping"];
+				if( isset( $global_f_checkout_fields["shipping"] ) )
+				foreach($global_f_checkout_fields["shipping"] as $key => $value) {	
+					$public = 'public';
+					if( ! version_compare( WOOCOMMERCE_VERSION, '3.0', '<' ) ) {
+						if( isset( $checkout_fields["shipping"][$key] ) ) $value[$public] = $checkout_fields["shipping"][$key][$public];
+					}
+					if(isset($checkout_fields["shipping"][$key]['payment_method'])) {
+						$pm_k_remove = array();
+						foreach($checkout_fields["shipping"][$key]['payment_method'] as $k => $v) {
+							if($v === '0') {
+								$pm_k_remove[] = $k;
+							}
+						}
+						
+						foreach($pm_k_remove as $k_remove) {
+							unset($checkout_fields["shipping"][$key]['payment_method'][$k_remove]);
+						}
+						if( isset( $checkout_fields["shipping"][$key] ) ) $value['payment_method'] = $checkout_fields["shipping"][$key]['payment_method'];
+					}
+					if(isset($checkout_fields["shipping"][$key]['shipping_method'])) {
+						$pm_k_remove = array();
+						foreach($checkout_fields["shipping"][$key]['shipping_method'] as $k => $v) {
+							if($v === '0') {
+								$pm_k_remove[] = $k;
+							}
+						}
+						
+						foreach($pm_k_remove as $k_remove) {
+							unset($checkout_fields["shipping"][$key]['shipping_method'][$k_remove]);
+						}
+						if( isset( $checkout_fields["shipping"][$key] ) ) $value['shipping_method'] = $checkout_fields["shipping"][$key]['shipping_method'];
+					}
 				if( empty($value['public']) && !is_array($checkout_fields["shipping"]) ) $value['public'] = true;
 					?>
 					<tr>
 						<td><input  disabled  value=<?php echo $key?> type="text" name="shipping[<?php echo $key?>][name]" /></td>
-						<td><input value='<?php echo $value['label']?>' type="text" name="shipping[<?php echo $key?>][label]" /><input value='<?php echo $value['type']?>' type="hidden" name="shipping[<?php echo $key?>][type]" /></td>
+						<td><input value='<?php echo isset($value['label']) ? $value['label']: ''; ?>' type="text" name="shipping[<?php echo $key?>][label]" /><input value='<?php echo isset($value['type']) ? $value['type']: '' ?>' type="hidden" name="shipping[<?php echo $key?>][type]" /></td>
 						<td><input value='<?php if(isset( $value['placeholder'] )) echo $value['placeholder']; ?>' type="text" name="shipping[<?php echo $key?>][placeholder]" /></td>
-						<td><input <?php if(isset($value['clear']) && $value['clear']) echo 'checked'?> class="<?php echo $value['clear']?>" type="checkbox" name="shipping[<?php echo $key?>][clear]" /></td>
+						<td><input <?php if(isset($value['clear']) && $value['clear']) echo 'checked'?> class="<?php echo isset($value['clear'])? $value['clear'] : ''; ?>" type="checkbox" name="shipping[<?php echo $key?>][clear]" /></td>
 						<td><?php  if( isset($value['class']) && is_array($value['class']) ) { foreach($value['class'] as $v_class) { ?>
 						
 						<input value='<?php echo $v_class;?>' type="text" name="shipping[<?php echo $key?>][class][]" /> <?php } } else { ?>
@@ -753,6 +1104,27 @@ Domain Path: /languages
 						} ?></td>
 						<td><input <?php if(isset($value['required']) && $value['required']) echo 'checked'?> type="checkbox" name="shipping[<?php echo $key?>][required]" /></td>
 						<td><input <?php if(isset($value['public']) && $value['public']) echo 'checked';?> type="checkbox" name="shipping[<?php echo $key?>][public]" /></td>
+						<td>
+						<select multiple="multiple" width="120px" name="shipping[<?php echo $key?>][payment_method][]">
+							<option value="0" <?php if( isset($value['payment_method']) && ( in_array('0', $value['payment_method']) || empty($value['payment_method']) ) || !isset($value['payment_method']) ) echo 'selected';?>>Все</option>
+							<?php 
+								foreach ( $woocommerce->payment_gateways->payment_gateways() as $gateway ) {
+									if ( $gateway->enabled != 'yes' ) continue;
+									?><option value="<?php echo $gateway->id; ?>" <?php if(isset($value['payment_method']) && in_array($gateway->id, $value['payment_method']) ) echo 'selected';?>><?php echo $gateway->title; ?></option><?php
+								} 
+							?>
+						</select>
+						</td><td>
+						<select multiple="multiple" width="120px" name="shipping[<?php echo $key?>][shipping_method][]">
+							<option value="0" <?php if( isset($value['shipping_method']) && ( in_array('0', $value['shipping_method']) || empty($value['shipping_method']) ) || !isset($value['shipping_method']) ) echo 'selected';?>>Все</option>
+							<?php 
+								foreach ( $woocommerce->shipping->get_shipping_methods() as $act_id => $shipping ) {
+									if ( $shipping->enabled != 'yes' ) continue;
+									?><option value="<?php echo $act_id; ?>" <?php if(isset($value['shipping_method']) && in_array($act_id, $value['shipping_method']) ) echo 'selected';?>><?php echo $shipping->title ? $shipping->title: $shipping->method_title; ?></option><?php
+								} 
+							?>
+						</select>
+						</td>
 						
 						<td><input rel="sort_order"  id="order_count" type="hidden" name="shipping[<?php echo $key?>][order]" value="<?php echo $count?>" /><input type="button" class="button" id="billing_delete" value="Удалить -"/>
 							<?php 
@@ -770,13 +1142,12 @@ Domain Path: /languages
 						<td></td>
 						<td></td>
 						<td></td>
+						<td></td>
 		
 						<td></td>
 						<td></td>
 						<td></td>
-						<td></td>
-					
-						<td><input type="button" class="button" id="shipping" value="Добавить +"/></td>
+						<td colspan="2"><input type="button" class="button" id="shipping" value="Добавить +"/></td>
 				</tr>
 			
 			</tbody>
@@ -792,7 +1163,6 @@ Domain Path: /languages
 					<th width="130px">Класс поля</th>
 					<th width="130px">Тип поля</th>
 					<th  width="40px">Опу&shy;бли&shy;ко&shy;вать</th>
-					
 					<th width="65px">Удалить/До&shy;ба&shy;вить</th>
 				</tr>
 			</thead>
@@ -804,15 +1174,18 @@ Domain Path: /languages
 					<th>Класс поля</th>
 					<th>Тип поля</th>
 					<th  width="40px">Опу&shy;бли&shy;ко&shy;вать</th>
-					
 					<th>Удалить/До&shy;ба&shy;вить</th>
 				</tr>
 			</tfoot>
 			<tbody id="the-list" class="myTable">
 				<?php $count = 0;
-				if(isset($checkout_fields["order"]) && is_array($checkout_fields["order"])) $f->checkout_fields["order"] = $checkout_fields["order"];
-				if(isset($f->checkout_fields["order"]) )
-				foreach($f->checkout_fields["order"] as $key => $value) {	
+				if(isset($checkout_fields["order"]) && is_array($checkout_fields["order"])) $global_f_checkout_fields["order"] = $checkout_fields["order"];
+				if(isset($global_f_checkout_fields["order"]) )
+				foreach($global_f_checkout_fields["order"] as $key => $value) {
+					$public = 'public';
+					if( ! version_compare( WOOCOMMERCE_VERSION, '3.0', '<' ) ) {
+						if( isset( $checkout_fields["order"][$key] ) ) $value[$public] = $checkout_fields["order"][$key][$public];
+					}
 					if(empty($value['public']) && !is_array($checkout_fields["order"])) $value['public'] = true;
 					?>
 					<tr>
@@ -865,7 +1238,7 @@ Domain Path: /languages
 				background:none repeat scroll 0 0 #EAEAEA !important;
 				color:#636060 !important;
 			}
-			
+			#the-list select { width: 120px; }
 			</style>
 			<script type="text/javascript">
 			(function($){$.fn.tipTip=function(options){var defaults={activation:"hover",keepAlive:false,maxWidth:"200px",edgeOffset:3,defaultPosition:"bottom",delay:400,fadeIn:200,fadeOut:200,attribute:"title",content:false,enter:function(){},exit:function(){}};var opts=$.extend(defaults,options);if($("#tiptip_holder").length<=0){var tiptip_holder=$('<div id="tiptip_holder" style="max-width:'+opts.maxWidth+';"></div>');var tiptip_content=$('<div id="tiptip_content"></div>');var tiptip_arrow=$('<div id="tiptip_arrow"></div>');$("body").append(tiptip_holder.html(tiptip_content).prepend(tiptip_arrow.html('<div id="tiptip_arrow_inner"></div>')))}else{var tiptip_holder=$("#tiptip_holder");var tiptip_content=$("#tiptip_content");var tiptip_arrow=$("#tiptip_arrow")}return this.each(function(){var org_elem=$(this);if(opts.content){var org_title=opts.content}else{var org_title=org_elem.attr(opts.attribute)}if(org_title!=""){if(!opts.content){org_elem.removeAttr(opts.attribute)}var timeout=false;if(opts.activation=="hover"){org_elem.hover(function(){active_tiptip()},function(){if(!opts.keepAlive){deactive_tiptip()}});if(opts.keepAlive){tiptip_holder.hover(function(){},function(){deactive_tiptip()})}}else if(opts.activation=="focus"){org_elem.focus(function(){active_tiptip()}).blur(function(){deactive_tiptip()})}else if(opts.activation=="click"){org_elem.click(function(){active_tiptip();return false}).hover(function(){},function(){if(!opts.keepAlive){deactive_tiptip()}});if(opts.keepAlive){tiptip_holder.hover(function(){},function(){deactive_tiptip()})}}function active_tiptip(){opts.enter.call(this);tiptip_content.html(org_title);tiptip_holder.hide().removeAttr("class").css("margin","0");tiptip_arrow.removeAttr("style");var top=parseInt(org_elem.offset()['top']);var left=parseInt(org_elem.offset()['left']);var org_width=parseInt(org_elem.outerWidth());var org_height=parseInt(org_elem.outerHeight());var tip_w=tiptip_holder.outerWidth();var tip_h=tiptip_holder.outerHeight();var w_compare=Math.round((org_width-tip_w)/2);var h_compare=Math.round((org_height-tip_h)/2);var marg_left=Math.round(left+w_compare);var marg_top=Math.round(top+org_height+opts.edgeOffset);var t_class="";var arrow_top="";var arrow_left=Math.round(tip_w-12)/2;if(opts.defaultPosition=="bottom"){t_class="_bottom"}else if(opts.defaultPosition=="top"){t_class="_top"}else if(opts.defaultPosition=="left"){t_class="_left"}else if(opts.defaultPosition=="right"){t_class="_right"}var right_compare=(w_compare+left)<parseInt($(window).scrollLeft());var left_compare=(tip_w+left)>parseInt($(window).width());if((right_compare&&w_compare<0)||(t_class=="_right"&&!left_compare)||(t_class=="_left"&&left<(tip_w+opts.edgeOffset+5))){t_class="_right";arrow_top=Math.round(tip_h-13)/2;arrow_left=-12;marg_left=Math.round(left+org_width+opts.edgeOffset);marg_top=Math.round(top+h_compare)}else if((left_compare&&w_compare<0)||(t_class=="_left"&&!right_compare)){t_class="_left";arrow_top=Math.round(tip_h-13)/2;arrow_left=Math.round(tip_w);marg_left=Math.round(left-(tip_w+opts.edgeOffset+5));marg_top=Math.round(top+h_compare)}var top_compare=(top+org_height+opts.edgeOffset+tip_h+8)>parseInt($(window).height()+$(window).scrollTop());var bottom_compare=((top+org_height)-(opts.edgeOffset+tip_h+8))<0;if(top_compare||(t_class=="_bottom"&&top_compare)||(t_class=="_top"&&!bottom_compare)){if(t_class=="_top"||t_class=="_bottom"){t_class="_top"}else{t_class=t_class+"_top"}arrow_top=tip_h;marg_top=Math.round(top-(tip_h+5+opts.edgeOffset))}else if(bottom_compare|(t_class=="_top"&&bottom_compare)||(t_class=="_bottom"&&!top_compare)){if(t_class=="_top"||t_class=="_bottom"){t_class="_bottom"}else{t_class=t_class+"_bottom"}arrow_top=-12;marg_top=Math.round(top+org_height+opts.edgeOffset)}if(t_class=="_right_top"||t_class=="_left_top"){marg_top=marg_top+5}else if(t_class=="_right_bottom"||t_class=="_left_bottom"){marg_top=marg_top-5}if(t_class=="_left_top"||t_class=="_left_bottom"){marg_left=marg_left+5}tiptip_arrow.css({"margin-left":arrow_left+"px","margin-top":arrow_top+"px"});tiptip_holder.css({"margin-left":marg_left+"px","margin-top":marg_top+"px"}).attr("class","tip"+t_class);if(timeout){clearTimeout(timeout)}timeout=setTimeout(function(){tiptip_holder.stop(true,true).fadeIn(opts.fadeIn)},opts.delay)}function deactive_tiptip(){opts.exit.call(this);if(timeout){clearTimeout(timeout)}tiptip_holder.fadeOut(opts.fadeOut)}}})}})(jQuery);
@@ -876,13 +1249,13 @@ Domain Path: /languages
 				'delay' : 200
 			});
 			jQuery('input[value="billing_booking_delivery_t"]').parent().parent().hide();
-		jQuery('.delete-option').live('click',function() {
+		jQuery("body").delegate('.delete-option', 'click',function() {
 			jQuery(this).parent().remove();
 		});
-		jQuery('.button.add_option').live('click',function() {
+		jQuery("body").delegate('.button.add_option', 'click',function() {
 			jQuery(this).before(' <span><br /><input type="text" id="options" value="" name="billing['+jQuery(this).attr('rel')+'][options][option-'+ (jQuery(this).parent().find('input').length + 1) +']"/><span class="delete-option" style="cursor:pointer;border:1px solid">Удалить</span></span>');
 		});
-		jQuery('input[type="radio"]').live('click',function() {
+		jQuery("body").delegate('input[type="radio"]', 'click',function() {
 			if( jQuery(this).val() == 'select' || jQuery(this).val() == 'radio') {
 				jQuery(this).parent().parent().find('td').css('border-bottom', 'none');
 				jQuery(this).parent().parent().addClass('parrent_td_option'+jQuery('.button.add_option').length);
@@ -900,31 +1273,74 @@ Domain Path: /languages
 			}
 		});
 		
-		jQuery('input#options').live('blur', function() {
+		jQuery("body").delegate('input#options', 'blur', function() {
 			var text = jQuery(this).attr('name');
 			text = text.replace(/\[options\]\[(.*)\]/g,'[options]['+ jQuery(this).val() +']');
 			jQuery(this).attr('name', text);
 		});
-			jQuery('.button#billing').live('click',function() {
+		var fild_pm;
+			jQuery("body").delegate('.button#billing','click',function() {
 				var obj = jQuery(this).parent().parent();
-			obj.html('<td><input value="billing_new_fild'+(parseInt(obj.parent().find('tr td input#order_count:last').val(),10)+1)+'" type="text" name="billing[new_fild][name][]" /></td><td><input value="" type="text" name="billing[new_fild][label][]" /></td><td><input value="" type="text" name="billing[new_fild][placeholder][]" /></td><td><input type="checkbox" name="billing[new_fild][clear][]" /></td><td><input value="" type="text" name="billing[new_fild][class][]" /></td><td>	Select <input type="radio" value="select" name="billing[new_fild][type]"><br>Radio <input type="radio" value="radio" name="billing[new_fild][type]"><br>Checkbox <input type="radio" value="checkbox" name="billing[new_fild][type]"><br>	Textarea <input type="radio" value="textarea" name="billing[new_fild][type]"><br>	Text <input type="radio" value="" name="billing[new_fild][type]" checked="checked"></td><td><input checked type="checkbox" name="billing[new_fild][required][]" /></td><td><input checked type="checkbox" name="billing[new_fild][public][]" /></td><td><input id="order_count" rel="sort_order" type="hidden" name="billing[new_fild][order][]" value="'+(parseInt(obj.parent().find('tr td input#order_count:last').val(),10)+1)+'" /><input type="button" class="button" id="billing_delete" value="Удалить -"/></td>');
+				fild_pm = '<td>\
+						<select multiple="multiple" width="120px" name="billing[new_fild][payment_method][]">\
+							<option selected value="0">Все</option>\
+							<?php 
+								foreach ( $woocommerce->payment_gateways->payment_gateways() as $gateway ) {
+									if ( $gateway->enabled != 'yes' ) continue;
+									?><option value="<?php echo $gateway->id; ?>" <?php if(isset($value['payment_method']) && in_array($gateway->id, $value['payment_method']) ) echo 'selected';?>><?php echo str_replace("'", "\\'", $gateway->title); ?></option><?php
+								} 
+							?>\
+						</select>\
+						</td>' + '<td>\
+						<select multiple="multiple" width="120px" name="billing[new_fild][shipping_method][]">\
+							<option selected value="0">Все</option>\
+							<?php 
+								foreach ( $woocommerce->shipping->get_shipping_methods() as $act_id => $shipping ) {
+									if ( $shipping->enabled != 'yes' ) continue;
+									?><option value="<?php echo $act_id; ?>" <?php if(isset($value['shipping_method']) && in_array($act_id, $value['shipping_method']) ) echo 'selected';?>><?php $st = $shipping->title ? $shipping->title: $shipping->method_title; echo str_replace("'", "\\'", $st); ?></option><?php
+								} 
+							?>\
+						</select>\
+						</td>';
+			obj.html('<td><input value="billing_new_fild'+(parseInt(obj.parent().find('tr td input#order_count:last').val(),10)+1)+'" type="text" name="billing[new_fild][name][]" /></td><td><input value="" type="text" name="billing[new_fild][label][]" /></td><td><input value="" type="text" name="billing[new_fild][placeholder][]" /></td><td><input type="checkbox" name="billing[new_fild][clear][]" /></td><td><input value="" type="text" name="billing[new_fild][class][]" /></td><td>	Select <input type="radio" value="select" name="billing[new_fild][type]"><br>Radio <input type="radio" value="radio" name="billing[new_fild][type]"><br>Checkbox <input type="radio" value="checkbox" name="billing[new_fild][type]"><br>	Textarea <input type="radio" value="textarea" name="billing[new_fild][type]"><br>	Text <input type="radio" value="" name="billing[new_fild][type]" checked="checked"></td><td><input checked type="checkbox" name="billing[new_fild][required][]" /></td><td><input checked type="checkbox" name="billing[new_fild][public][]" /></td>' + fild_pm + '<td><input id="order_count" rel="sort_order" type="hidden" name="billing[new_fild][order][]" value="'+(parseInt(obj.parent().find('tr td input#order_count:last').val(),10)+1)+'" /><input type="button" class="button" id="billing_delete" value="Удалить -"/></td>');
 				obj.removeClass('nodrop nodrag');
 				obj.after('<tr  class="nodrop nodrag"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td><input type="button" class="button" id="billing" value="Добавить +"/></td></tr>');
 			});
-			jQuery('.button#shipping').live('click',function() {
+			jQuery("body").delegate('.button#shipping', 'click',function() {
 				var obj = jQuery(this).parent().parent();
-				obj.html('<td><input value="shipping_new_fild'+(parseInt(obj.parent().find('tr td input#order_count:last').val(),10)+1)+'" type="text" name="shipping[new_fild][name][]" /></td><td><input value="" type="text" name="shipping[new_fild][label][]" /></td><td><input value="" type="text" name="shipping[new_fild][placeholder][]" /></td><td><input type="checkbox" name="shipping[new_fild][clear][]" /></td><td><input value="" type="text" name="shipping[new_fild][class][]" /></td><td><input checked type="checkbox" name="shipping[new_fild][required][]" /></td><td><input checked type="checkbox" name="shipping[new_fild][public][]" /></td><td><input id="order_count" rel="sort_order" type="hidden" name="shipping[new_fild][order][]" value="'+(parseInt(obj.parent().find('tr td input#order_count:last').val(),10)+1)+'" /><input type="button" class="button" id="billing_delete" value="Удалить -"/></td>');
+				fild_pm = '<td>\
+						<select multiple="multiple" width="120px" name="shipping[new_fild][payment_method][]">\
+							<option selected value="0">Все</option>\
+							<?php 
+								foreach ( $woocommerce->payment_gateways->payment_gateways() as $gateway ) {
+									if ( $gateway->enabled != 'yes' ) continue;
+									?><option value="<?php echo $gateway->id; ?>" <?php if(isset($value['payment_method']) && in_array($gateway->id, $value['payment_method']) ) echo 'selected';?>><?php echo str_replace("'", "\\'", $gateway->title); ?></option><?php
+								} 
+							?>\
+						</select>\
+						</td>' + '<td>\
+						<select multiple="multiple" width="120px" name="shipping[new_fild][shipping_method][]">\
+							<option selected value="0">Все</option>\
+							<?php 
+								foreach ( $woocommerce->shipping->get_shipping_methods() as $act_id => $shipping ) {
+									if ( $shipping->enabled != 'yes' ) continue;
+									?><option value="<?php echo $act_id; ?>" <?php if(isset($value['shipping_method']) && in_array($act_id, $value['shipping_method']) ) echo 'selected';?>><?php $st = $shipping->title ? $shipping->title: $shipping->method_title; echo str_replace("'", "\\'", $st); ?></option><?php
+								}  
+							?>\
+						</select>\
+						</td>';
+				obj.html('<td><input value="shipping_new_fild'+(parseInt(obj.parent().find('tr td input#order_count:last').val(),10)+1)+'" type="text" name="shipping[new_fild][name][]" /></td><td><input value="" type="text" name="shipping[new_fild][label][]" /></td><td><input value="" type="text" name="shipping[new_fild][placeholder][]" /></td><td><input type="checkbox" name="shipping[new_fild][clear][]" /></td><td><input value="" type="text" name="shipping[new_fild][class][]" /></td><td><input checked type="checkbox" name="shipping[new_fild][required][]" /></td><td><input checked type="checkbox" name="shipping[new_fild][public][]" /></td>' + fild_pm + '<td><input id="order_count" rel="sort_order" type="hidden" name="shipping[new_fild][order][]" value="'+(parseInt(obj.parent().find('tr td input#order_count:last').val(),10)+1)+'" /><input type="button" class="button" id="billing_delete" value="Удалить -"/></td>');
 				obj.removeClass('nodrop nodrag');
 				obj.after('<tr  class="nodrop nodrag"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td><input type="button" class="button" id="shipping" value="Добавить +"/></td></tr>');
 			});
-			jQuery('.button#order').live('click',function() {
+			jQuery("body").delegate('.button#order', 'click',function() {
 				var obj = jQuery(this).parent().parent();
 				obj.html('<td><input value="order_new_fild'+(parseInt(obj.parent().find('tr td input#order_count:last').val(),10)+1)+'" type="text" name="order[new_fild][name][]" /></td><td><input value="" type="text" name="order[new_fild][label][]" /></td><td><input value="" type="text" name="order[new_fild][placeholder][]" /></td><td><input value="" type="text" name="order[new_fild][class][]" /></td><td><input checked type="text" name="order[new_fild][type][]" /></td><td><input checked type="checkbox" name="order[new_fild][public][]" /></td><td><input id="order_count" rel="sort_order" type="hidden" name="order[new_fild][order][]" value="'+(parseInt(obj.parent().find('tr td input#order_count:last').val(),10)+1)+'" /><input type="button" class="button" id="billing_delete" value="Удалить -"/></td>');
 				obj.removeClass('nodrop nodrag');
 				obj.after('<tr  class="nodrop nodrag"><td></td><td></td><td></td><td></td><td></td><td></td><td><input type="button" class="button" id="order" value="Добавить +"/></td></tr>');
 			});
 
-			jQuery('.button#billing_delete').live('click',function() {
+			jQuery("body").delegate('.button#billing_delete', 'click',function() {
 				var obj = jQuery(this).parent().parent();
 				var obj_r = obj.parent();
 				obj.remove();
@@ -981,15 +1397,15 @@ Domain Path: /languages
 							'description' => ''
 						),
 					'billing_city' => array(
-							'label' => __('City', 'woocommerce'),
+							'label' => __('Town / City', 'woocommerce'),
 							'description' => ''
 						),
 					'billing_postcode' => array(
-							'label' => __('Postcode', 'woocommerce'),
+							'label' => __('Postcode / ZIP', 'woocommerce'),
 							'description' => ''
 						),
 					'billing_state' => array(
-							'label' => __('State/County', 'woocommerce'),
+							'label' => __('State / County', 'woocommerce'),
 							'description' => __('Country or state code', 'woocommerce'),
 						),
 					'billing_country' => array(
@@ -1051,8 +1467,9 @@ Domain Path: /languages
 		return $show_fields;
 	}
 	function woocommerce_get_customer_meta_fields_saphali() {
-		$fieldss = get_option('woocommerce_saphali_filds_filters');
-
+		if(! isset($this->fieldss) )
+			$this->fieldss = get_option('woocommerce_saphali_filds_filters');
+		$fieldss = $this->fieldss;
 		$show_fields = $this->woocommerce_get_customer_meta_fields_saph_ed();
 
 		
@@ -1203,7 +1620,10 @@ Domain Path: /languages
 	}
 	function saphali_custom_override_checkout_fields( $fields ) {
 		
-		$fieldss = get_option('woocommerce_saphali_filds_filters');
+		if(! isset($this->fieldss) )
+			$this->fieldss = get_option('woocommerce_saphali_filds_filters');
+		$fieldss = $this->fieldss;
+		
 		if(is_array($fieldss)) {
 			$fields["billing"] = $fieldss["billing"];
 			$fields["shipping"] = $fieldss["shipping"];
@@ -1214,22 +1634,26 @@ Domain Path: /languages
 			if(isset($fields[$v][$key]["label"]))
 			$fields[$v][$key]["label"] = __($value["label"], 'woocommerce');
 			if(isset($fields[$v][$key]["placeholder"]))
-			$fields[$v][$key]["placeholder"] = __($value["placeholder"], 'saphali-woocommerce-lite');
+			$fields[$v][$key]["placeholder"] = __( __($value["placeholder"], 'saphali-woocommerce-lite'), 'woocommerce');
 		}
 		 return $fields;
 	}
 	function saphali_custom_edit_address_fields( $fields ) {
 		global $wp;
-		$fieldss = get_option('woocommerce_saphali_filds_filters');
+		if(! isset($this->fieldss) )
+			$this->fieldss = get_option('woocommerce_saphali_filds_filters');
+		$fieldss = $this->fieldss;
+		$__fields = array();
 		if(is_array($fieldss))
  		$_fields = $fieldss["billing"];
 		if( isset($_fields) && is_array($_fields) )
 		foreach($_fields as $key => $value) {
 			if(str_replace( 'billing_','', $key ) != 'email')
-			$__fields[wc_edit_address_i18n( sanitize_key( $wp->query_vars['edit-address'] ), true ) . str_replace( 'billing','', $key ) ] = $value;
-			$_a_ = array_diff_assoc ($__fields, $fields);
-			if(is_array($_a_) && is_array($fields) ) $fields = (array)$fields + (array)$_a_;
+			$__fields[wc_edit_address_i18n( sanitize_key( $wp->query_vars['edit-address'] ), true ) . '_' . str_replace( 'billing_','', $key ) ] = $value;
 		}
+		$_a_ = array_diff($__fields, $fields);
+			if(is_array($_a_) && is_array($fields) ) $fields = (array)$fields + (array)$_a_;
+		
 		foreach($fields as $key => $value) {
 			if(isset($fields[$key]["label"]))
 			$fields[$key]["label"] = __($value["label"], 'woocommerce');
@@ -1239,8 +1663,10 @@ Domain Path: /languages
 		return $fields;
 	}
 	function saphali_custom_billing_fields( $fields ) {
-
-		$fieldss = get_option('woocommerce_saphali_filds_filters');
+		if(! isset($this->fieldss) )
+			$this->fieldss = get_option('woocommerce_saphali_filds_filters');
+		$fieldss = $this->fieldss;
+	
 		if(is_array($fieldss))
  		$fields = $fieldss["billing"];
 		foreach($fields as $key => $value) {
@@ -1253,7 +1679,9 @@ Domain Path: /languages
 		return $fields;
 	}
 	function saphali_custom_shipping_fields( $fields ) {
-		$fieldss = get_option('woocommerce_saphali_filds_filters');
+		if(! isset($this->fieldss) )
+			$this->fieldss = get_option('woocommerce_saphali_filds_filters');
+		$fieldss = $this->fieldss;
 		if(is_array($fieldss))
 		$fields = $fieldss["shipping"];
 		foreach($fields as $key => $value) {
@@ -1481,7 +1909,7 @@ function saphali_woo_lite_install() {
 		}
 		update_option('woocommerce_saphali_filds_locate',$locate);
 	}
-	//if(!update_option('woocommerce_informal_localisation_type' , 'yes'))add_option('woocommerce_informal_localisation_type' , 'yes');
+	//update_option('woocommerce_informal_localisation_type' , 'yes');
 	//global $woocommerce;
 	//copy( SAPHALI_PLUGIN_DIR_PATH . '/languages/woocommerce-ru_RU.mo', $woocommerce->plugin_path() .'/i18n/languages/informal/woocommerce-ru_RU.mo');
 	//copy( SAPHALI_PLUGIN_DIR_PATH . '/languages/woocommerce-ru_RU.po', $woocommerce->plugin_path() .'/i18n/languages/informal/woocommerce-ru_RU.po');

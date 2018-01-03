@@ -14,10 +14,10 @@ class Imagify_AS3CF {
 	 *
 	 * @var string
 	 */
-	const VERSION = '1.0';
+	const VERSION = '1.0.1';
 
 	/**
-	 * Context used with get_imagify_attachment_class_name().
+	 * Context used with get_imagify_attachment().
 	 * It matches the class name Imagify_AS3CF_Attachment.
 	 *
 	 * @var string
@@ -84,6 +84,11 @@ class Imagify_AS3CF {
 		add_filter( 'imagify_optimize_attachment_context', array( $this, 'optimize_attachment_context' ), 10, 2 );
 
 		/**
+		 * Redirections.
+		 */
+		add_filter( 'imagify_redirect_to', array( $this, 'redirect_referrer' ) );
+
+		/**
 		 * Bulk optimization.
 		 */
 		add_action( 'imagify_bulk_optimize_before_file_existence_tests', array( $this, 'maybe_copy_files_from_s3' ), 8, 3 );
@@ -97,10 +102,10 @@ class Imagify_AS3CF {
 		 * Automatic optimisation.
 		 */
 		// Remove some of our hooks: let S3 work first in these cases.
-		remove_filter( 'wp_generate_attachment_metadata',                       '_imagify_optimize_attachment', PHP_INT_MAX );
-		remove_action( 'wp_ajax_imagify_async_optimize_as3cf',                  '_do_admin_post_async_optimize_upload_new_media' );
+		remove_filter( 'wp_generate_attachment_metadata',                       '_imagify_optimize_attachment', IMAGIFY_INT_MAX );
+		remove_action( 'wp_ajax_imagify_async_optimize_upload_new_media',       array( Imagify_Admin_Ajax_Post::get_instance(), 'imagify_async_optimize_upload_new_media_callback' ) );
 		remove_action( 'shutdown',                                              '_imagify_optimize_save_image_editor_file' );
-		remove_action( 'wp_ajax_imagify_async_optimize_save_image_editor_file', '_do_admin_post_async_optimize_save_image_editor_file' );
+		remove_action( 'wp_ajax_imagify_async_optimize_save_image_editor_file', array( Imagify_Admin_Ajax_Post::get_instance(), 'imagify_async_optimize_save_image_editor_file_callback' ) );
 
 		// Store the IDs of the attachments being uploaded.
 		add_filter( 'wp_generate_attachment_metadata',      array( $this, 'store_upload_ids' ), 10, 2 );
@@ -127,10 +132,24 @@ class Imagify_AS3CF {
 	 * @return string                The new context.
 	 */
 	public function optimize_attachment_context( $context, $attachment_id ) {
-		if ( self::CONTEXT === $context || imagify_is_attachment_mime_type_supported( $attachment_id ) ) {
+		if ( self::CONTEXT === $context || ( 'wp' === $context && imagify_is_attachment_mime_type_supported( $attachment_id ) ) ) {
 			return self::CONTEXT;
 		}
 		return $context;
+	}
+
+	/**
+	 * After a non-ajax optimization, remove some unnecessary arguments from the referrer used for the redirection.
+	 * Those arguments don't break anything, they're just not relevant and display obsolete admin notices.
+	 *
+	 * @since  1.6.10
+	 * @author Grégory Viguier
+	 *
+	 * @param  string $redirect The URL to redirect to.
+	 * @return string
+	 */
+	public function redirect_referrer( $redirect ) {
+		return remove_query_arg( array( 'as3cfpro-action', 'as3cf_id', 'errors', 'count' ), $redirect );
 	}
 
 	/**
@@ -154,6 +173,12 @@ class Imagify_AS3CF {
 		$ids = array_flip( $ids );
 
 		foreach ( $ids as $id => $i ) {
+			if ( empty( $results['filenames'][ $id ] ) ) {
+				// Problem.
+				unset( $ids[ $id ] );
+				continue;
+			}
+
 			$file_path = get_imagify_attached_file( $results['filenames'][ $id ] );
 
 			/** This filter is documented in inc/functions/process.php. */
@@ -192,7 +217,7 @@ class Imagify_AS3CF {
 		}
 
 		unset( $sql_ids );
-		$s3_data = imagify_query_results_combine( $ids, $s3_data, true );
+		$s3_data = Imagify_DB::combine_query_results( $ids, $s3_data, true );
 
 		// Retrieve the missing files from S3.
 		$ids = array_flip( $ids );
@@ -247,7 +272,7 @@ class Imagify_AS3CF {
 		}
 
 		if ( ! isset( $data ) ) {
-			$data = imagify_get_wpdb_metas( array(
+			$data = Imagify_DB::get_metas( array(
 				// Get the filesizes.
 				's3_filesize' => 'wpos3_filesize_total',
 			), $image_ids );
@@ -316,17 +341,31 @@ class Imagify_AS3CF {
 		}
 
 		if ( ! isset( $auto_optimize ) ) {
-			$auto_optimize = get_imagify_option( 'api_key' ) && get_imagify_option( 'auto_optimize' );
+			$auto_optimize = imagify_valid_key() && get_imagify_option( 'auto_optimize' );
 		}
 
-		if ( $is_new_upload && ! $auto_optimize ) {
-			// It's a new upload and auto-optimization is disabled.
-			return $metadata;
+		if ( $is_new_upload ) {
+			// It's a new upload.
+			if ( ! $auto_optimize ) {
+				// Auto-optimization is disabled.
+				return $metadata;
+			}
+
+			/** This filter is documented in inc/common/attachments.php. */
+			$optimize = apply_filters( 'imagify_auto_optimize_attachment', true, $attachment_id, $metadata );
+
+			if ( ! $optimize ) {
+				return $metadata;
+			}
 		}
 
-		if ( ! $is_new_upload && ! get_post_meta( $attachment_id, '_imagify_data', true ) ) {
-			// It's not a new upload and the attachment is not optimized yet.
-			return $metadata;
+		if ( ! $is_new_upload ) {
+			$attachment = get_imagify_attachment( self::CONTEXT, $attachment_id, 'as3cf_async_job' );
+
+			if ( ! $attachment->get_data() ) {
+				// It's not a new upload and the attachment is not optimized yet.
+				return $metadata;
+			}
 		}
 
 		$data = array();
@@ -359,7 +398,7 @@ class Imagify_AS3CF {
 
 		check_ajax_referer( 'imagify_async_optimize_as3cf' );
 
-		if ( empty( $_POST['post_id'] ) || ! current_user_can( 'upload_files' ) ) {
+		if ( empty( $_POST['post_id'] ) || ! imagify_current_user_can( 'auto-optimize' ) ) {
 			die();
 		}
 
@@ -374,8 +413,7 @@ class Imagify_AS3CF {
 		}
 
 		$optimization_level = null;
-		$class_name         = get_imagify_attachment_class_name( self::CONTEXT, $attachment_id, 'as3cf_optimize' );
-		$attachment         = new $class_name( $attachment_id );
+		$attachment         = get_imagify_attachment( self::CONTEXT, $attachment_id, 'as3cf_optimize' );
 
 		// Some specifics for the image editor.
 		if ( ! empty( $_POST['data']['do'] ) ) {
@@ -415,16 +453,4 @@ class Imagify_AS3CF {
 
 		return imagify_is_attachment_mime_type_supported( $post_id );
 	}
-}
-
-/**
- * Returns the main instance of the Imagify_AS3CF class.
- *
- * @since  1.6.6
- * @author Grégory Viguier
- *
- * @return object The Imagify_AS3CF instance.
- */
-function imagify_as3cf() {
-	return Imagify_AS3CF::get_instance();
 }

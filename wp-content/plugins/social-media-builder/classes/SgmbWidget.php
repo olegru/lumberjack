@@ -20,15 +20,17 @@ class SgmbWidget extends WP_Widget
  	public function widget($args, $instance)
  	{
  		global $post;
-		$postImage = wp_get_attachment_url( get_post_thumbnail_id($post->ID));
+		$postImage = wp_get_attachment_url(get_post_thumbnail_id($post->ID));
 		if($postImage == false) {
 			$postImage = $this->getPostImage();
 		}
+		$postUrl = get_permalink();
  		$data = array();
 		$data = $this->getData($instance['id']);
+		unset($data['options']['sgmbSelectedPosts']);
 		if(!empty($data)) {
 			$html = $this->prepareWidget($data);
-			$html .= $this->showWidget(json_encode($data), self::$widgetCounter, $postImage);
+			$html .= $this->showWidget(json_encode($data), self::$widgetCounter, $postImage, $postUrl);
 			echo  $html;
 		}
 	}
@@ -42,15 +44,31 @@ class SgmbWidget extends WP_Widget
 		else {
 			$themeType = @$data['options']['socialTheme'];
 		}
-		if(@$data['button'][0] != '') {
+
+		if (@$data['options']['showButtonsInPopup'] == 'on' && @$data['button'][0] != '') {
+			$html = '<div id="" class="sg-simple-popup">
+						<div id="sgmb-title-popup">'.$data['options']['titleOfPopup'].'</div>
+						<div id="sgmb-description-popup">'.$data['options']['descriptionOfPopup'].'</div>
+						<div id="sgmbShare'.@$data['id'] .'-'.self::$widgetCounter.'" class="sgmbShare sgmb-center jssocials-theme-'.$themeType.' sgmbWidget'.@$data['id'].'-'.self::$widgetCounter.'">
+						</div>
+					</div>';
+			$html .='<div class="dropdownWrapper dropdownWrapper'.@$data['id'] .' dropdownWrapper-for-widget " id="dropdownWrapper-for-widget">
+						<div class="dropdownLabel" id="dropdownLabel-share-list"><span class="sgmbButtonListLabel'.@$data['id'].'">Share List</span></div>
+						<div class="dropdownPanel dropdownPanel'.@$data['id'] .'-'.self::$widgetCounter.'">
+						</div>
+					</div>';
+			$html .= '<script>  SGMB_URL = "'.SGMB_URL.'"; jQuery(".dropdownWrapper").hide();  SGMB_GOOGLE_ACOUNT = "'.@$data['options']['googleAnaliticsAccount'].'";</script>';
+		}
+		else if(@$data['button'][0] != '') {
 			$html = '<div id="sgmbShare'.@$data['id'] .'-'.self::$widgetCounter.'" class="sgmbShare jssocials-theme-'.$themeType.' sgmbWidget'.@$data['id'].'-'.self::$widgetCounter.'"></div>';
 			$html .='<div class="dropdownWrapper dropdownWrapper'.@$data['id'] .' dropdownWrapper-for-widget " id="dropdownWrapper-for-widget">
 						<div class="dropdownLabel" id="dropdownLabel-share-list"><span class="sgmbButtonListLabel'.@$data['id'].'">Share List</span></div>
 						<div class="dropdownPanel dropdownPanel'.@$data['id'] .'-'.self::$widgetCounter.'">
 						</div>
 					</div>';
-			$html .= '<script>  SGMB_URL = "'.SGMB_URL.'"; jQuery(".dropdownWrapper").hide();</script>';
+			$html .= '<script>  SGMB_URL = "'.SGMB_URL.'"; jQuery(".dropdownWrapper").hide(); SGMB_GOOGLE_ACOUNT = "'.@$data['options']['googleAnaliticsAccount'].'"; </script>';
 		}
+
 
 		self::renderScripts($themeType);
 		return @$html;
@@ -75,33 +93,42 @@ class SgmbWidget extends WP_Widget
 	public function init($args)
 	{
 		global $post;
-		$postImage = wp_get_attachment_url( get_post_thumbnail_id($post->ID));
-		if($postImage == false) {
+		$postImage = wp_get_attachment_url(get_post_thumbnail_id($post->ID));
+		if ($postImage == false) {
 			$postImage = $this->getPostImage();
 		}
+		$postUrl = get_permalink();
+		$customImageUrl = @$args['customimageurl'];
 		$data = $this->getData($args['id']);
-		if(!empty($data)) {
+		if (isset($data['options']['shareText'])) {
+			$data['options']['shareText'] = htmlspecialchars_decode($data['options']['shareText'], ENT_QUOTES);
+		}
+
+		unset($data['options']['sgmbSelectedPosts']);
+		if (!empty($data)) {
 			$html = $this->prepareWidget($data);
-			$html .=  $this->showWidget(json_encode($data), self::$widgetCounter, $postImage);
+			$html .=  $this->showWidget(json_encode($data), self::$widgetCounter, $postImage, $customImageUrl, $postUrl);
 			return $html;
 		}
 	}
+
 	public function getPostImage() {
 		global $post, $posts;
 		$first_img = '';
 		ob_start();
 		ob_end_clean();
 		$output = preg_match_all('/<img.+src=[\'"]([^\'"]+)[\'"].*>/i', $post->post_content, $matches);
-		if(isset($matches[1][0])){
+
+		if (isset($matches[1][0])){
 			$first_img = $matches[1][0];
 		}
-		
-		if(empty($first_img)) {
+
+		if (empty($first_img)) {
 			$first_img = SGMB_URL.'/img/no-image.png';
 		}
 		return $first_img;
 	}
-	
+
 	public function form( $instance )
 	{
 		$data = SGMBButton::getDataList();
@@ -144,8 +171,10 @@ class SgmbWidget extends WP_Widget
 		wp_enqueue_script('sgmb-class-sgmbWidget');
 		wp_register_style('sgmb_socialFont_style',SGMB_URL.'css/jssocial/font-awesome.min.css');
 		wp_enqueue_style('sgmb_socialFont_style');
-		wp_register_script('sgmb-jssocial1-scripts', SGMB_URL.'js/jssocials.min.js', array('jquery'),null);
+		wp_register_script('sgmb-jssocial1-scripts', SGMB_URL.'js/jssocials.js', array('jquery'),null);
 		wp_enqueue_script('sgmb-jssocial1-scripts');
+		wp_register_script('sgmb-jssocial2-scripts', SGMB_URL.'js/jssocials.shares.js', array('jquery'),null);
+		wp_enqueue_script('sgmb-jssocial2-scripts');
 		wp_register_script('sgmb-drop_down-scripts',SGMB_URL.'js/simple.dropdown.js', array('jquery'),null);
 		wp_enqueue_script('sgmb-drop_down-scripts');
 		wp_register_style('sgmb_social2_style',SGMB_URL.'css/jssocial/jssocials.css');
@@ -160,13 +189,13 @@ class SgmbWidget extends WP_Widget
 		wp_enqueue_style('sgmb_drop_down_style');
 	}
 
-	public  function showWidget($data, $widgetCounter, $postImage)
+	public  function showWidget($data, $widgetCounter, $postImage, $customImageUrl=null, $postUrl=null)
 	{
 		$content = "<script type=\"text/javascript\">
 		jQuery(document).ready(function($){";
 		$content .= "var widget = new SGMBWidget();";
-		$content .= "widget.show($data, $widgetCounter, '', '$postImage');";
+		$content .= "widget.show($data, $widgetCounter, '', '$postImage', '$customImageUrl', '$postUrl');";
 		$content .= " });</script>";
-		echo $content;
+		return $content;
 	}
 }
