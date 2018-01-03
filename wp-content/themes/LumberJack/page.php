@@ -1,5 +1,5 @@
-<?php get_header(); ?>
-<?php get_sidebar('sidebar'); ?>
+<?php get_header(); ?>BBBBBB
+<?php get_sidebar('sidebar'); ?>NNNNNNNNN
 <div class="center clearfix">
 			<style type="text/css">
 				
