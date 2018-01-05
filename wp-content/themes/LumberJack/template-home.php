@@ -2,21 +2,15 @@
 	/* Template Name: Главная */
 ?>
 <?php get_header(); ?>
+
 <div class="container-fluid padding-0">
-	<?php get_sidebar('sidebar'); ?>
-	<div class="content col-lg-10 col-xs-12 col-md-12">
-		<div id="img-top" class="img-top col-lg-12 padding-0 hidden-xs hidden-md">
-			<?php echo do_shortcode('[rev_slider main]'); ?>
-		</div>
+	<div class="content col-lg-12 col-xs-12 col-md-12">
 		<div id="lumber-jeck" class="top-side col-lg-12 col-xs-12 col-md-12 padding-0 margin-top-75px">
-			<div class="img-icon padding-0 col-lg-7 col-xs-12 col-md-12">
-				<img src="<?php bloginfo('template_url'); ?>/img/fr_icon_1.jpg">
+			<div class="padding-0 col-lg-5 col-xs-12 col-md-12">
+				<img class="img" src="<?php bloginfo('template_url'); ?>/img/about.jpg">
 			</div>
-			<div class="img-desc padding-0 col-lg-3 col-xs-12 col-md-12 col-lg-offset-1">
-				<h1>LuMBERJACK</h1>
-				
+			<div class="img-desc padding-0 col-lg-7 col-xs-12 col-md-12">
 				<?= get_post_meta($post->ID, 'home_desc', true); ?>
-				
 			</div>
 		</div>
 		<div id="best-side" class="top-side col-lg-12 col-xs-12 col-md-12 padding-0 margin-top-55px">
@@ -42,8 +36,8 @@
 				</ul>
 			</div>
 		</div>
-		<div id="services" class="our-service col-lg-12 col-xs-12 col-md-12 padding-0 margin-top-85px">
-			<div class="prop-srv col-lg-12 col-xs-12 col-md-12 padding-0">
+		<div class="our-service fullwidth">
+			<div id="services" class="col-lg-12 col-xs-12 col-md-12">
 				<div class="block-title">
 					<h3>
 						<?php

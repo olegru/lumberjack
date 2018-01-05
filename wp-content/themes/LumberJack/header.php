@@ -71,6 +71,10 @@
         </object>
     </div>
 </div>
+<?php get_sidebar('sidebar'); ?>
+<div id="img-top" class="img-top col-lg-12 padding-0 hidden-xs hidden-md">
+    <?php echo do_shortcode('[rev_slider main]'); ?>
+</div>
 <div class="wrapper">
     <div class="head-mobile hidden-lg hidden-xs hidden-sm col-md-12 col-xs-12 padding-0">
         <?php
